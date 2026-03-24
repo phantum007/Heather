@@ -1,0 +1,68 @@
+{% extends 'ui/student_base.html' %}
+
+{% block eyebrow %}Student workspace{% endblock %}
+{% block page_title %}Student Dashboard{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow muted">Welcome back</p>
+    <p class="hero-copy">Track assigned lessons, review your progress, and open the latest work from one place.</p>
+  </div>
+  <div class="hero-actions">
+    <a href="{% url 'ui-student-assignments' %}" class="button primary">Open Assignments</a>
+  </div>
+</section>
+
+<section class="grid grid-3">
+  <article class="card stat-card">
+    <p class="stat-label">Grade</p>
+    <p class="stat-value">{{ student_profile.grade.grade_name|default:'-' }}</p>
+    <p class="stat-meta">Current learner grade.</p>
+  </article>
+  <article class="card stat-card">
+    <p class="stat-label">Assigned</p>
+    <p class="stat-value">{{ total_assignments }}</p>
+    <p class="stat-meta">Total assignments in your queue.</p>
+  </article>
+  <article class="card stat-card">
+    <p class="stat-label">Pending</p>
+    <p class="stat-value">{{ pending_count }}</p>
+    <p class="stat-meta">Assignments not submitted yet.</p>
+  </article>
+</section>
+
+<section class="grid grid-2">
+  <article class="card">
+    <h3>Latest Assignment</h3>
+    {% if latest_assignment %}
+      <div class="list-card">
+        <div>
+          <p class="list-title">{{ latest_assignment.lesson.lesson_name }}</p>
+          <p class="stat-meta">{{ latest_assignment.lesson.grade.grade_name }} • {{ latest_assignment.get_assignment_kind_display }}{% if latest_assignment.available_on %} • Available {{ latest_assignment.available_on|date:"d M Y" }}{% endif %}</p>
+        </div>
+        <span class="badge">{% if latest_assignment.is_submitted %}Submitted{% else %}Pending{% endif %}</span>
+      </div>
+    {% else %}
+      <div class="empty-state">No assignments have been assigned yet.</div>
+    {% endif %}
+  </article>
+
+  <article class="card">
+    <h3>Recent Assignments</h3>
+    <div class="stack">
+      {% for assignment in assignments %}
+        <div class="list-card">
+          <div>
+            <p class="list-title">{{ assignment.lesson.lesson_name }}</p>
+            <p class="stat-meta">{{ assignment.lesson.grade.grade_name }} • {{ assignment.get_assignment_kind_display }}{% if assignment.available_on %} • {{ assignment.available_on|date:"d M Y" }}{% endif %}</p>
+          </div>
+          <span class="badge">{% if assignment.is_submitted %}Submitted{% else %}Pending{% endif %}</span>
+        </div>
+      {% empty %}
+        <div class="empty-state">Your assignments will appear here.</div>
+      {% endfor %}
+    </div>
+  </article>
+</section>
+{% endblock %}

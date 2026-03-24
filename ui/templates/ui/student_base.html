@@ -1,0 +1,47 @@
+{% extends 'ui/base.html' %}
+
+{% block body %}
+<div class="teacher-shell">
+  <aside class="teacher-sidebar">
+    <div class="brand">
+      <div class="brand-mark">A</div>
+      <div>
+        <h1>Abacus Student</h1>
+      </div>
+    </div>
+
+    <div class="profile-card">
+      <div class="avatar">{{ current_user.name|first|default:'S' }}</div>
+      <div>
+        <p class="profile-name">{{ current_user.name }}</p>
+        <p class="profile-email">{{ current_user.email }}</p>
+      </div>
+    </div>
+
+    <nav class="nav-list">
+      <a href="{% url 'ui-student-dashboard' %}" class="{% if request.path == '/student/' %}active{% endif %}">Dashboard</a>
+      <a href="{% url 'ui-student-assignments' %}" class="{% if '/student/assignments/' in request.path %}active{% endif %}">Assignments</a>
+    </nav>
+
+    <a href="{% url 'ui-logout' %}" class="button ghost full">Sign Out</a>
+  </aside>
+
+  <main class="teacher-main">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">{% block eyebrow %}Student Portal{% endblock %}</p>
+        <h2 class="page-title">{% block page_title %}Dashboard{% endblock %}</h2>
+      </div>
+      <div class="status-pill">Live Student UI</div>
+    </header>
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert {% if 'success' in message.tags %}alert-success{% else %}alert-error{% endif %}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% endblock %}

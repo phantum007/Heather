@@ -1,0 +1,70 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Student onboarding{% endblock %}
+{% block page_title %}Add Student{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="toolbar">
+    <div>
+      <h3>Onboard Student</h3>
+      <p class="card-subtitle">Create a new student account. Profile photo can be added now or later.</p>
+    </div>
+    <a href="{% url 'ui-teacher-students' %}" class="button secondary">Back to Students</a>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="onboard-grid">
+    {% csrf_token %}
+    <label class="field">
+      <span>First Name</span>
+      <input class="input" type="text" name="first_name" placeholder="First name" required>
+    </label>
+
+    <label class="field">
+      <span>Last Name</span>
+      <input class="input" type="text" name="last_name" placeholder="Last name" required>
+    </label>
+
+    <label class="field">
+      <span>Date of Birth</span>
+      <input class="input" type="date" name="date_of_birth">
+      <small class="field-note">Optional. Add the student date of birth if available.</small>
+    </label>
+
+    <label class="field">
+      <span>Father Name</span>
+      <input class="input" type="text" name="father_name" placeholder="Father name" required>
+    </label>
+
+    <label class="field">
+      <span>Mother Name</span>
+      <input class="input" type="text" name="mother_name" placeholder="Mother name" required>
+    </label>
+
+    <label class="field">
+      <span>Email</span>
+      <input class="input" type="email" name="email" placeholder="student@example.com" required>
+    </label>
+
+    <label class="field">
+      <span>Contact</span>
+      <input class="input" type="text" name="contact" placeholder="Contact number" required>
+    </label>
+
+    <label class="field">
+      <span>Password</span>
+      <input class="input" type="text" name="password" placeholder="Create temporary password" required>
+    </label>
+
+    <label class="field">
+      <span>Profile Photo</span>
+      <input class="input" type="file" name="profile_photo" accept="image/*">
+      <small class="field-note">Optional. Upload a profile image if available.</small>
+    </label>
+
+    <div class="onboard-actions">
+      <button class="button primary" type="submit">Onboard Student</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

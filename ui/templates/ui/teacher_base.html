@@ -1,0 +1,62 @@
+{% extends 'ui/base.html' %}
+
+{% block body %}
+<div class="teacher-shell">
+  <aside class="teacher-sidebar">
+    <div class="brand">
+      <div class="brand-mark">A</div>
+      <div>
+        <p class="brand-eyebrow">Teacher</p>
+        <h1>Abacus</h1>
+      </div>
+    </div>
+
+    <div class="profile-card">
+      <div class="avatar">{{ current_user.name|first|default:'T' }}</div>
+      <div>
+        <p class="profile-name">{{ current_user.name }}</p>
+        <p class="profile-email">{{ current_user.email }}</p>
+      </div>
+    </div>
+
+    <nav class="nav-list">
+      <a href="{% url 'ui-teacher-dashboard' %}" class="{% if request.path == '/teacher/' %}active{% endif %}">Dashboard</a>
+      <a href="{% url 'ui-teacher-students' %}" class="{% if '/teacher/students/' in request.path %}active{% endif %}">Students</a>
+      <a href="{% url 'ui-teacher-curriculum' %}" class="{% if '/teacher/curriculum/' in request.path %}active{% endif %}">Curriculum</a>
+      <a href="{% url 'ui-teacher-create-assignment' %}" class="{% if '/teacher/create-assignment/' in request.path %}active{% endif %}">Assignments</a>
+      <a href="{% url 'ui-teacher-results' %}" class="{% if '/teacher/results/' in request.path %}active{% endif %}">Leaderboard</a>
+    </nav>
+
+    <a href="{% url 'ui-logout' %}" class="button ghost full">Sign Out</a>
+  </aside>
+
+  <main class="teacher-main">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Welcome</p>
+        <h2 class="page-title">Teacher {{ current_user.name }}</h2>
+      </div>
+      <div class="status-pill">{% now "d M Y" %}</div>
+    </header>
+
+    <section class="hero">
+      <div>
+        <p class="eyebrow muted">Teacher workspace</p>
+        <p class="hero-copy">Plan lessons, assign practice, and review student performance from one place.</p>
+      </div>
+      <div class="hero-actions">
+        <a href="{% url 'ui-teacher-create-assignment' %}" class="button primary">Create Assignment</a>
+        <a href="{% url 'ui-teacher-results' %}" class="button secondary">Open Leaderboard</a>
+      </div>
+    </section>
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert {% if 'success' in message.tags %}alert-success{% else %}alert-error{% endif %}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Leaderboard view{% endblock %}
+{% block page_title %}Leaderboard{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="toolbar">
+    <div>
+      <h3>Leaderboard</h3>
+      <p class="card-subtitle">This section is intentionally blank for now and ready for leaderboard rules.</p>
+    </div>
+    <span class="badge">Coming next</span>
+  </div>
+
+  <div class="leaderboard-shell">
+    <div class="leaderboard-header">
+      <span>Rank</span>
+      <span>Student</span>
+      <span>Grade</span>
+      <span>Score</span>
+    </div>
+
+    <div class="leaderboard-empty">
+      <p class="placeholder-title">Leaderboard is blank</p>
+      <p class="placeholder-copy">Once you decide the scoring logic and layout details, I can plug the data in here.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}

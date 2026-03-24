@@ -1,0 +1,35 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Curriculum management{% endblock %}
+{% block page_title %}Edit {{ item_label }}{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="toolbar">
+    <div>
+      <h3>Edit {{ item_label }}</h3>
+      <p class="card-subtitle">Update the selected curriculum item from the tree.</p>
+    </div>
+    <a href="{% url 'ui-teacher-curriculum' %}" class="button secondary">Back to Curriculum</a>
+  </div>
+
+  <form method="post" class="curriculum-form-card">
+    {% csrf_token %}
+    <label class="field">
+      <span>{{ item_label }}</span>
+      {% if item_type == 'question' %}
+        <textarea class="input curriculum-textarea" name="value" required>{{ item_value }}</textarea>
+      {% else %}
+        <input class="input" type="text" name="value" value="{{ item_value }}" required>
+      {% endif %}
+    </label>
+    {% if item_type == 'question' %}
+      <label class="field">
+        <span>Answer</span>
+        <textarea class="input curriculum-textarea" name="answer" required>{{ item_answer }}</textarea>
+      </label>
+    {% endif %}
+    <button class="button primary" type="submit">Save {{ item_label }}</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends 'ui/student_base.html' %}
+
+{% block eyebrow %}Student assignments{% endblock %}
+{% block page_title %}Assignments{% endblock %}
+
+{% block content %}
+<section class="grid grid-2">
+  <article class="card">
+    <div class="toolbar">
+      <div>
+        <h3>Your Assignments</h3>
+        <p class="card-subtitle">Open any assignment to view details and submission status.</p>
+      </div>
+      <span class="badge">{{ assignments|length }} assigned</span>
+    </div>
+
+    <div class="stack">
+      {% for assignment in assignments %}
+        <a href="{% url 'ui-student-assignments' %}?assignment_id={{ assignment.id }}" class="list-card">
+          <div>
+            <p class="list-title">{{ assignment.lesson.lesson_name }}</p>
+            <p class="stat-meta">{{ assignment.lesson.grade.grade_name }} • {{ assignment.get_assignment_kind_display }} • Teacher: {{ assignment.teacher.name }}{% if assignment.available_on %} • {{ assignment.available_on|date:"d M Y" }}{% endif %}</p>
+          </div>
+          <span class="badge">{% if assignment.is_submitted %}Submitted{% else %}Pending{% endif %}</span>
+        </a>
+      {% empty %}
+        <div class="empty-state">No assignments are available yet.</div>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="card">
+    <div class="toolbar">
+      <div>
+        <h3>Assignment Detail</h3>
+        <p class="card-subtitle">Review questions and answers for the selected assignment.</p>
+      </div>
+    </div>
+
+    {% if assignment_detail %}
+      <div class="result-summary">
+        <p class="stat-label">{{ assignment_detail.assignment.get_assignment_kind_display }}</p>
+        <p class="stat-value">{{ assignment_detail.correct }}/{{ assignment_detail.total }}</p>
+        <p class="stat-meta">{{ assignment_detail.percentage }}% correct{% if assignment_detail.assignment.available_on %} • Available {{ assignment_detail.assignment.available_on|date:"d M Y" }}{% endif %}</p>
+      </div>
+
+      <div class="stack">
+        {% for question in assignment_detail.questions %}
+          <div class="question-card {% if question.is_correct %}question-card-success{% else %}question-card-error{% endif %}">
+            <p class="list-title">{{ question.question_text }}</p>
+            <p class="stat-meta">Your answer: {{ question.student_answer|default:'Not submitted' }}</p>
+            <p class="stat-meta">Correct answer: {{ question.correct_answer }}</p>
+          </div>
+        {% empty %}
+          <div class="empty-state">This assignment does not have questions yet.</div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">Select an assignment from the left to view its details.</div>
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends 'ui/base.html' %}
+
+{% block title %}Login | Abacus Portal{% endblock %}
+
+{% block body %}
+<div class="login-shell">
+  <div class="login-card">
+    <p class="eyebrow">Django UI</p>
+    <h1>Abacus Portal</h1>
+    <p class="subcopy">Sign in with your teacher or student account to open the Django-rendered workspace.</p>
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-error">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+
+    <form method="post" class="stack-lg">
+      {% csrf_token %}
+      <label class="field">
+        <span>Email</span>
+        <input class="input" type="email" name="email" required>
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input class="input" type="password" name="password" required>
+      </label>
+      <button class="button primary" type="submit">Login</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

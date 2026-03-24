@@ -1,0 +1,382 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Assignment workflow{% endblock %}
+{% block page_title %}Assignment Builder{% endblock %}
+
+{% block content %}
+<section class="card">
+  <style>
+    .lesson-picker-shell { border:1px solid #e2e8f0; background:#f8fafc; border-radius:24px; padding:18px; }
+    .lesson-picker-actions { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+    .lesson-picker-count { color:#64748b; font-weight:600; }
+    .lesson-checkbox-list { display:grid; gap:14px; }
+    .lesson-checkbox-card { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; padding:16px 18px; border:1px solid #cbd5e1; border-radius:20px; background:#fff; }
+    .lesson-checkbox-main { display:flex; gap:12px; align-items:flex-start; min-width:0; }
+    .lesson-checkbox-main input { margin-top:5px; }
+    .lesson-checkbox-copy { min-width:0; }
+    .lesson-checkbox-title { margin:0; font-size:18px; font-weight:700; color:#0f172a; }
+    .lesson-checkbox-meta { margin:8px 0 0; color:#64748b; font-size:14px; }
+    .lesson-view-button { border:0; background:none; padding:0; text-align:left; cursor:pointer; color:#0f172a; }
+    .lesson-view-button:hover { color:#2563eb; }
+    .lesson-view-link { white-space:nowrap; }
+    .dialog-backdrop { position:fixed; inset:0; background:rgba(15, 23, 42, 0.45); display:none; align-items:center; justify-content:center; padding:24px; z-index:30; }
+    .dialog-backdrop.open { display:flex; }
+    .dialog-card { width:min(100%, 920px); max-height:min(88vh, 900px); overflow:auto; border-radius:28px; background:#fff; border:1px solid #e2e8f0; box-shadow:0 30px 80px rgba(15, 23, 42, 0.2); padding:24px; }
+    .dialog-header { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:18px; }
+    .dialog-header h3 { margin:0; font-size:28px; }
+    .dialog-close { border:1px solid #cbd5e1; background:#fff; color:#334155; }
+    .dialog-track { border:1px solid #e2e8f0; border-radius:20px; padding:16px; background:#f8fafc; }
+    .dialog-track + .dialog-track { margin-top:14px; }
+    .dialog-track h4 { margin:0 0 12px; font-size:18px; color:#0f172a; }
+    .dialog-unit-list { display:grid; gap:12px; }
+    .dialog-unit { border:1px solid #dbeafe; border-radius:18px; background:#fff; padding:14px; }
+    .dialog-unit h5 { margin:0 0 10px; font-size:16px; color:#1d4ed8; }
+    .dialog-question-list { margin:0; padding-left:18px; color:#475569; display:grid; gap:8px; }
+    .dialog-empty { border:1px dashed #cbd5e1; border-radius:18px; padding:14px; color:#64748b; background:#fff; }
+    @media (max-width: 980px) {
+      .lesson-checkbox-card, .lesson-picker-actions, .dialog-header { flex-direction:column; align-items:stretch; }
+    }
+  </style>
+
+  <div class="toolbar">
+    <div>
+      <h3>Create Assignment</h3>
+      <p class="card-subtitle">Select the student, choose the grade, then tick the lessons you want to assign.</p>
+    </div>
+    <span class="badge">Lesson Mapping</span>
+  </div>
+
+  <form method="post" class="stack-lg">
+    {% csrf_token %}
+    <div class="grid grid-2">
+      <label class="field">
+        <span>Assignment Type</span>
+        <select class="input" id="assignment-kind-select" name="assignment_kind">
+          <option value="homework" {% if assignment_kind == 'homework' %}selected{% endif %}>Homework</option>
+          <option value="classroom" {% if assignment_kind == 'classroom' %}selected{% endif %}>Classroom Lesson</option>
+        </select>
+      </label>
+
+      <label class="field" id="assignment-date-field">
+        <span>Available On</span>
+        <input class="input" id="assignment-date-input" type="date" name="available_on" value="{{ available_on|default:today_value }}">
+        <span class="field-note" id="assignment-date-note">Homework uses today's date. Classroom lessons can be scheduled.</span>
+      </label>
+    </div>
+
+    <div class="grid grid-2">
+      <label class="field">
+        <span>Student</span>
+        <select class="input" id="assignment-student-select" name="student_id" required>
+          <option value="">Select Student</option>
+          {% for profile in students %}
+            <option value="{{ profile.user.id }}" data-grade-id="{{ profile.grade_id|default:'' }}" {% if selected_student_id == profile.user.id|stringformat:'s' %}selected{% endif %}>{{ profile.user.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Grade</span>
+        <select class="input" id="assignment-grade-select" name="grade_id" required>
+          <option value="">Select Grade</option>
+          {% for grade in grades %}
+            <option value="{{ grade.id }}" {% if selected_grade_id == grade.id|stringformat:'s' %}selected{% endif %}>{{ grade.grade_name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <div class="lesson-picker-shell">
+      <div class="lesson-picker-actions">
+        <div>
+          <p class="placeholder-title">Lessons</p>
+          <p class="lesson-picker-count" id="selected-lesson-count">{{ selected_lessons|length }} lesson(s) selected</p>
+        </div>
+        <div class="toolbar-actions">
+          <button class="button ghost" type="button" id="select-all-lessons">Select All</button>
+          <button class="button ghost" type="button" id="clear-all-lessons">Unselect All</button>
+        </div>
+      </div>
+
+      <div class="lesson-checkbox-list" id="lesson-checkbox-list">
+        {% for lesson in lesson_options %}
+          <label class="lesson-checkbox-card" data-grade-id="{{ lesson.grade_id }}">
+            <div class="lesson-checkbox-main">
+              <input type="checkbox" name="lesson_ids" value="{{ lesson.id }}" {% if lesson.id|stringformat:'s' in selected_lesson_ids %}checked{% endif %}>
+              <div class="lesson-checkbox-copy">
+                <button
+                  class="lesson-view-button lesson-checkbox-title"
+                  type="button"
+                  data-lesson-modal-trigger
+                  data-lesson-id="{{ lesson.id }}"
+                  data-lesson-name="{{ lesson.name }}"
+                >
+                  {{ lesson.name }}
+                </button>
+                <p class="lesson-checkbox-meta">{{ lesson.grade_name }} | {{ lesson.sub_lesson_count }} track(s) | {{ lesson.unit_count }} unit(s) | {{ lesson.question_count }} question(s)</p>
+              </div>
+            </div>
+            <button
+              class="button secondary lesson-view-link"
+              type="button"
+              data-lesson-modal-trigger
+              data-lesson-id="{{ lesson.id }}"
+              data-lesson-name="{{ lesson.name }}"
+            >
+              View Details
+            </button>
+          </label>
+        {% empty %}
+          <div class="empty-state">No lessons available yet. Please add curriculum lessons first.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="builder-placeholder assignment-summary-card">
+      <p class="placeholder-title">Assignment Summary</p>
+      <div class="assignment-summary-grid">
+        <div>
+          <p class="stat-label">Student</p>
+          <p class="assignment-summary-value">{{ selected_student.user.name|default:'Not selected yet' }}</p>
+        </div>
+        <div>
+          <p class="stat-label">Type</p>
+          <p class="assignment-summary-value">{% if assignment_kind == 'classroom' %}Classroom Lesson{% else %}Homework{% endif %}</p>
+        </div>
+        <div>
+          <p class="stat-label">Available On</p>
+          <p class="assignment-summary-value">{{ available_on|default:today_value }}</p>
+        </div>
+        <div>
+          <p class="stat-label">Grade</p>
+          <p class="assignment-summary-value">{{ selected_grade.grade_name|default:'Not selected yet' }}</p>
+        </div>
+        <div>
+          <p class="stat-label">Lessons</p>
+          <p class="assignment-summary-value">{{ selected_lessons|length }}</p>
+        </div>
+        <div>
+          <p class="stat-label">Save Mode</p>
+          <p class="assignment-summary-value">Student to lesson mapping</p>
+        </div>
+      </div>
+      <p class="placeholder-copy">Each selected lesson will be saved as its own assignment row for the chosen student.</p>
+    </div>
+
+    <div class="toolbar-actions">
+      <button class="button primary" type="submit">Save Lesson Mapping</button>
+    </div>
+  </form>
+</section>
+
+{% for lesson in lesson_options %}
+  <div class="dialog-backdrop" id="lesson-modal-{{ lesson.id }}" aria-hidden="true">
+    <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="lesson-modal-title-{{ lesson.id }}">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">{{ lesson.grade_name }}</p>
+          <h3 id="lesson-modal-title-{{ lesson.id }}">{{ lesson.name }}</h3>
+          <p class="card-subtitle">Tracks and units inside this lesson.</p>
+        </div>
+        <button class="button dialog-close" type="button" data-close-lesson-modal>Close</button>
+      </div>
+
+      {% for sub_lesson in lesson.sub_lessons %}
+        <div class="dialog-track">
+          <h4>{{ sub_lesson.name }}</h4>
+          {% if sub_lesson.units %}
+            <div class="dialog-unit-list">
+              {% for unit in sub_lesson.units %}
+                <div class="dialog-unit">
+                  <h5>{{ unit.name }}</h5>
+                  {% if unit.questions %}
+                    <ul class="dialog-question-list">
+                      {% for question in unit.questions %}
+                        <li>
+                          {{ question.text }}
+                          {% if question.answer %}
+                            <span class="field-inline-note">Answer: {{ question.answer }}</span>
+                          {% endif %}
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <div class="dialog-empty">No questions added yet.</div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="dialog-empty">No units added yet for this track.</div>
+          {% endif %}
+        </div>
+      {% empty %}
+        <div class="dialog-empty">No tracks added yet for this lesson.</div>
+      {% endfor %}
+    </div>
+  </div>
+{% endfor %}
+
+<script>
+  (function () {
+    const todayValue = "{{ today_value }}";
+    const studentSelect = document.getElementById('assignment-student-select');
+    const gradeSelect = document.getElementById('assignment-grade-select');
+    const assignmentKindSelect = document.getElementById('assignment-kind-select');
+    const assignmentDateInput = document.getElementById('assignment-date-input');
+    const assignmentDateNote = document.getElementById('assignment-date-note');
+    const lessonList = document.getElementById('lesson-checkbox-list');
+    const lessonCheckboxes = lessonList ? Array.from(lessonList.querySelectorAll('input[type="checkbox"][name="lesson_ids"]')) : [];
+    const lessonCards = lessonList ? Array.from(lessonList.querySelectorAll('[data-grade-id]')) : [];
+    const countNode = document.getElementById('selected-lesson-count');
+    const selectAllButton = document.getElementById('select-all-lessons');
+    const clearAllButton = document.getElementById('clear-all-lessons');
+    const modalTriggers = Array.from(document.querySelectorAll('[data-lesson-modal-trigger]'));
+    const modalCloseButtons = Array.from(document.querySelectorAll('[data-close-lesson-modal]'));
+    const modals = Array.from(document.querySelectorAll('.dialog-backdrop'));
+
+    function visibleLessonCheckboxes() {
+      return lessonCheckboxes.filter((checkbox) => {
+        const card = checkbox.closest('[data-grade-id]');
+        return card && card.style.display !== 'none';
+      });
+    }
+
+    function updateSelectedCount() {
+      if (!countNode) {
+        return;
+      }
+      const checkedCount = lessonCheckboxes.filter((checkbox) => checkbox.checked).length;
+      countNode.textContent = checkedCount + ' lesson(s) selected';
+    }
+
+    function syncStudentGrade() {
+      if (!studentSelect || !gradeSelect) {
+        return;
+      }
+      const selectedOption = studentSelect.selectedOptions[0];
+      const studentGradeId = selectedOption ? selectedOption.dataset.gradeId : '';
+      if (studentGradeId) {
+        gradeSelect.value = studentGradeId;
+      }
+    }
+
+    function syncLessonVisibility() {
+      const selectedGradeId = gradeSelect ? gradeSelect.value : '';
+      lessonCards.forEach((card) => {
+        const shouldShow = !selectedGradeId || card.dataset.gradeId === selectedGradeId;
+        card.style.display = shouldShow ? '' : 'none';
+        if (!shouldShow) {
+          const checkbox = card.querySelector('input[type="checkbox"][name="lesson_ids"]');
+          if (checkbox) {
+            checkbox.checked = false;
+          }
+        }
+      });
+      updateSelectedCount();
+    }
+
+    function syncAssignmentKind() {
+      if (!assignmentKindSelect || !assignmentDateInput || !assignmentDateNote) {
+        return;
+      }
+      const isClassroom = assignmentKindSelect.value === 'classroom';
+      assignmentDateInput.disabled = !isClassroom;
+      assignmentDateInput.required = isClassroom;
+      if (isClassroom) {
+        if (!assignmentDateInput.value) {
+          assignmentDateInput.value = todayValue;
+        }
+        assignmentDateNote.textContent = 'Classroom lessons are shown only on the selected date.';
+      } else {
+        assignmentDateInput.value = todayValue;
+        assignmentDateNote.textContent = "Homework uses today's date and keeps the picker locked.";
+      }
+    }
+
+    function openModal(modal) {
+      if (!modal) {
+        return;
+      }
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeModal(modal) {
+      if (!modal) {
+        return;
+      }
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    lessonCheckboxes.forEach((checkbox) => {
+      checkbox.addEventListener('change', updateSelectedCount);
+    });
+
+    if (studentSelect) {
+      studentSelect.addEventListener('change', function () {
+        syncStudentGrade();
+        syncLessonVisibility();
+      });
+    }
+
+    if (gradeSelect) {
+      gradeSelect.addEventListener('change', syncLessonVisibility);
+    }
+
+    if (assignmentKindSelect) {
+      assignmentKindSelect.addEventListener('change', syncAssignmentKind);
+    }
+
+    if (selectAllButton) {
+      selectAllButton.addEventListener('click', function () {
+        visibleLessonCheckboxes().forEach((checkbox) => {
+          checkbox.checked = true;
+        });
+        updateSelectedCount();
+      });
+    }
+
+    if (clearAllButton) {
+      clearAllButton.addEventListener('click', function () {
+        lessonCheckboxes.forEach((checkbox) => {
+          checkbox.checked = false;
+        });
+        updateSelectedCount();
+      });
+    }
+
+    modalTriggers.forEach((trigger) => {
+      trigger.addEventListener('click', function () {
+        openModal(document.getElementById('lesson-modal-' + trigger.dataset.lessonId));
+      });
+    });
+
+    modalCloseButtons.forEach((button) => {
+      button.addEventListener('click', function () {
+        closeModal(button.closest('.dialog-backdrop'));
+      });
+    });
+
+    modals.forEach((modal) => {
+      modal.addEventListener('click', function (event) {
+        if (event.target === modal) {
+          closeModal(modal);
+        }
+      });
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        modals.forEach(closeModal);
+      }
+    });
+
+    syncStudentGrade();
+    syncLessonVisibility();
+    syncAssignmentKind();
+    updateSelectedCount();
+  })();
+</script>
+{% endblock %}

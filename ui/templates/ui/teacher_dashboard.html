@@ -1,0 +1,44 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Welcome{% endblock %}
+{% block page_title %}Teacher {{ current_user.name }}{% endblock %}
+
+{% block content %}
+<section class="grid grid-3">
+  <article class="card stat-card">
+    <p class="stat-label">Students</p>
+    <p class="stat-value">{{ students|length }}</p>
+    <p class="stat-meta">Available learners in the current roster.</p>
+  </article>
+  <article class="card stat-card">
+    <p class="stat-label">Grades</p>
+    <p class="stat-value">{{ grades|length }}</p>
+    <p class="stat-meta">Active curriculum tracks configured in Postgres.</p>
+  </article>
+  <article class="card stat-card">
+    <p class="stat-label">Lesson Types</p>
+    <p class="stat-value">{{ total_lessons }}</p>
+    <p class="stat-meta">Ready-to-assign lesson templates.</p>
+  </article>
+</section>
+
+<section>
+  <article class="card">
+    <h3>Curriculum Snapshot</h3>
+    <p class="card-subtitle">Lesson availability by grade.</p>
+    <div class="stack">
+      {% for grade in grades %}
+        <div class="list-card">
+          <div>
+            <p class="list-title">{{ grade.grade_name }}</p>
+            <p class="stat-meta">{{ grade.lesson_types.count }} lesson{% if grade.lesson_types.count != 1 %}s{% endif %} configured</p>
+          </div>
+          <span class="badge">{{ grade.lesson_types.count }} ready</span>
+        </div>
+      {% empty %}
+        <div class="empty-state">No grades available yet.</div>
+      {% endfor %}
+    </div>
+  </article>
+</section>
+{% endblock %}

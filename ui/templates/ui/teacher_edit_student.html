@@ -1,0 +1,81 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Student management{% endblock %}
+{% block page_title %}Edit Student{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="toolbar">
+    <div>
+      <h3>Edit Student</h3>
+      <p class="card-subtitle">Update student details, contact information, grade, or profile photo.</p>
+    </div>
+    <a href="{% url 'ui-teacher-students' %}" class="button secondary">Back to Students</a>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="onboard-grid">
+    {% csrf_token %}
+    <label class="field">
+      <span>First Name</span>
+      <input class="input" type="text" name="first_name" value="{{ profile.first_name|default:'' }}" required>
+    </label>
+
+    <label class="field">
+      <span>Last Name</span>
+      <input class="input" type="text" name="last_name" value="{{ profile.last_name|default:'' }}" required>
+    </label>
+
+    <label class="field">
+      <span>Date of Birth</span>
+      <input class="input" type="date" name="date_of_birth" value="{{ profile.date_of_birth|date:'Y-m-d' }}">
+      <small class="field-note">Optional. Update the date of birth if needed.</small>
+    </label>
+
+    <label class="field">
+      <span>Father Name</span>
+      <input class="input" type="text" name="father_name" value="{{ profile.father_name|default:'' }}" required>
+    </label>
+
+    <label class="field">
+      <span>Mother Name</span>
+      <input class="input" type="text" name="mother_name" value="{{ profile.mother_name|default:'' }}" required>
+    </label>
+
+    <label class="field">
+      <span>Email</span>
+      <input class="input" type="email" name="email" value="{{ profile.user.email }}" required>
+    </label>
+
+    <label class="field">
+      <span>Contact</span>
+      <input class="input" type="text" name="contact" value="{{ profile.contact|default:'' }}" required>
+    </label>
+
+    <label class="field">
+      <span>Password</span>
+      <input class="input" type="text" name="password" placeholder="Leave blank to keep current password">
+      <small class="field-note">Optional. Only enter a value if you want to change the password.</small>
+    </label>
+
+    <label class="field">
+      <span>Grade <small class="field-inline-note">(Optional)</small></span>
+      <select class="input" name="grade_id">
+        <option value="">Select Grade</option>
+        {% for grade in grades %}
+          <option value="{{ grade.id }}" {% if profile.grade_id == grade.id %}selected{% endif %}>{{ grade.grade_name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Profile Photo</span>
+      <input class="input" type="file" name="profile_photo" accept="image/*">
+      <small class="field-note">Optional. Upload a new image to replace the current one.</small>
+    </label>
+
+    <div class="onboard-actions">
+      <button class="button primary" type="submit">Save Changes</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

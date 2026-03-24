@@ -1,0 +1,435 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Curriculum builder{% endblock %}
+{% block page_title %}Curriculum Structure{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="toolbar">
+    <div>
+      <h3>Curriculum Builder</h3>
+      <p class="card-subtitle">Build the hierarchy step by step using the tabs below.</p>
+    </div>
+    <span class="badge">Hierarchy</span>
+  </div>
+
+  <div class="curriculum-tab-bar" role="tablist" aria-label="Curriculum sections">
+    <button type="button" class="curriculum-tab{% if active_tab == 'grade-panel' %} active{% endif %}" data-tab-target="grade-panel" role="tab" aria-selected="{% if active_tab == 'grade-panel' %}true{% else %}false{% endif %}">Grades</button>
+    <button type="button" class="curriculum-tab{% if active_tab == 'lesson-panel' %} active{% endif %}" data-tab-target="lesson-panel" role="tab" aria-selected="{% if active_tab == 'lesson-panel' %}true{% else %}false{% endif %}">Lessons</button>
+    <button type="button" class="curriculum-tab{% if active_tab == 'chapter-panel' %} active{% endif %}" data-tab-target="chapter-panel" role="tab" aria-selected="{% if active_tab == 'chapter-panel' %}true{% else %}false{% endif %}">Units</button>
+    <button type="button" class="curriculum-tab{% if active_tab == 'learning-panel' %} active{% endif %}" data-tab-target="learning-panel" role="tab" aria-selected="{% if active_tab == 'learning-panel' %}true{% else %}false{% endif %}">Questions</button>
+    <button type="button" class="curriculum-tab{% if active_tab == 'tree-panel' %} active{% endif %}" data-tab-target="tree-panel" role="tab" aria-selected="{% if active_tab == 'tree-panel' %}true{% else %}false{% endif %}">Tree</button>
+  </div>
+
+  <div id="grade-panel" class="curriculum-panel{% if active_tab == 'grade-panel' %} active{% endif %}" role="tabpanel"{% if active_tab != 'grade-panel' %} hidden{% endif %}>
+    <section class="curriculum-section-card">
+      <div class="curriculum-section-head">
+        <div>
+          <p class="stat-label">Step 1</p>
+          <h3>Add Grade</h3>
+          <p class="card-subtitle">Start by creating the grade level.</p>
+        </div>
+      </div>
+      <form method="post" class="curriculum-form-card">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_grade">
+        <input type="hidden" name="active_tab" value="grade-panel">
+        <label class="field">
+          <span>Grade Name</span>
+          <input class="input" type="text" name="name" placeholder="Grade 1" required>
+        </label>
+        <button class="button primary" type="submit">Add Grade</button>
+      </form>
+    </section>
+  </div>
+
+  <div id="lesson-panel" class="curriculum-panel{% if active_tab == 'lesson-panel' %} active{% endif %}" role="tabpanel"{% if active_tab != 'lesson-panel' %} hidden{% endif %}>
+    <section class="curriculum-section-card">
+      <div class="curriculum-section-head">
+        <div>
+          <p class="stat-label">Step 2</p>
+          <h3>Add Lesson</h3>
+          <p class="card-subtitle">Select a grade, add the lesson name, and choose the standard lesson tracks.</p>
+        </div>
+      </div>
+      <form method="post" class="curriculum-form-card">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_lesson">
+        <input type="hidden" name="active_tab" value="lesson-panel">
+        <label class="field">
+          <span>Grade</span>
+          <select class="input" name="parent_id" required>
+            <option value="">Select Grade</option>
+            {% for grade in grades %}
+              <option value="{{ grade.id }}">{{ grade.grade_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Lesson Name</span>
+          <input class="input" type="text" name="name" placeholder="Addition Basics" required>
+        </label>
+        <div class="field">
+          <span>Lesson Tracks</span>
+          <div class="checkbox-grid">
+            {% for item in sub_lesson_type_master %}
+              <label class="checkbox-card">
+                <input type="checkbox" name="sub_lesson_type_ids" value="{{ item.id }}">
+                <span>{{ item.type_name }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+        <button class="button primary" type="submit">Add Lesson</button>
+      </form>
+    </section>
+  </div>
+
+  <div id="chapter-panel" class="curriculum-panel{% if active_tab == 'chapter-panel' %} active{% endif %}" role="tabpanel"{% if active_tab != 'chapter-panel' %} hidden{% endif %}>
+    <section class="curriculum-section-card">
+      <div class="curriculum-section-head">
+        <div>
+          <p class="stat-label">Step 3</p>
+          <h3>Add Unit</h3>
+          <p class="card-subtitle">Pick the lesson path and selected track before adding a unit.</p>
+        </div>
+      </div>
+      <form method="post" class="curriculum-form-card">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_chapter">
+        <input type="hidden" name="active_tab" value="chapter-panel">
+        <label class="field">
+          <span>Grade</span>
+          <select class="input" id="chapter-grade-filter">
+            <option value="">Select Grade</option>
+            {% for grade in grades %}
+              <option value="{{ grade.id }}">{{ grade.grade_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Lesson</span>
+          <select class="input" id="chapter-lesson-filter">
+            <option value="">Select Lesson</option>
+            {% for lesson in lessons %}
+              <option value="{{ lesson.id }}" data-grade-id="{{ lesson.grade_id }}">{{ lesson.grade.grade_name }} -> {{ lesson.lesson_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Lesson Track</span>
+          <select class="input" id="chapter-sublesson-select" name="parent_id" required>
+            <option value="">Select Lesson Track</option>
+            {% for sub_lesson in sub_lessons %}
+              <option value="{{ sub_lesson.id }}" data-grade-id="{{ sub_lesson.lesson_type.grade_id }}" data-lesson-id="{{ sub_lesson.lesson_type_id }}">{{ sub_lesson.lesson_type.grade.grade_name }} -> {{ sub_lesson.lesson_type.lesson_name }} -> {{ sub_lesson.sub_lesson_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Unit Name</span>
+          <input class="input" type="text" name="name" placeholder="Mental Method" required>
+        </label>
+        <button class="button primary" type="submit">Add Unit</button>
+      </form>
+    </section>
+  </div>
+
+  <div id="learning-panel" class="curriculum-panel{% if active_tab == 'learning-panel' %} active{% endif %}" role="tabpanel"{% if active_tab != 'learning-panel' %} hidden{% endif %}>
+    <section class="curriculum-section-card">
+      <div class="curriculum-section-head">
+        <div>
+          <p class="stat-label">Step 5</p>
+          <h3>Add Question</h3>
+          <p class="card-subtitle">Use the full path to target the exact unit before adding a question.</p>
+        </div>
+      </div>
+      <form method="post" class="curriculum-form-card">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_learning">
+        <input type="hidden" name="active_tab" value="learning-panel">
+        <label class="field">
+          <span>Grade</span>
+          <select class="input" id="learning-grade-filter">
+            <option value="">Select Grade</option>
+            {% for grade in grades %}
+              <option value="{{ grade.id }}">{{ grade.grade_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Lesson</span>
+          <select class="input" id="learning-lesson-filter">
+            <option value="">Select Lesson</option>
+            {% for lesson in lessons %}
+              <option value="{{ lesson.id }}" data-grade-id="{{ lesson.grade_id }}">{{ lesson.grade.grade_name }} -> {{ lesson.lesson_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Lesson Track</span>
+          <select class="input" id="learning-sublesson-filter">
+            <option value="">Select Lesson Track</option>
+            {% for sub_lesson in sub_lessons %}
+              <option value="{{ sub_lesson.id }}" data-grade-id="{{ sub_lesson.lesson_type.grade_id }}" data-lesson-id="{{ sub_lesson.lesson_type_id }}">{{ sub_lesson.lesson_type.grade.grade_name }} -> {{ sub_lesson.lesson_type.lesson_name }} -> {{ sub_lesson.sub_lesson_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Unit</span>
+          <select class="input" id="learning-chapter-filter">
+            <option value="">Select Unit</option>
+            {% for chapter in chapters %}
+              <option value="{{ chapter.id }}" data-grade-id="{{ chapter.sub_lesson.lesson_type.grade_id }}" data-lesson-id="{{ chapter.sub_lesson.lesson_type_id }}" data-sublesson-id="{{ chapter.sub_lesson_id }}">{{ chapter.sub_lesson.lesson_type.grade.grade_name }} -> {{ chapter.sub_lesson.lesson_type.lesson_name }} -> {{ chapter.sub_lesson.sub_lesson_name }} -> {{ chapter.chapter_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <input type="hidden" id="learning-unit-select" name="parent_id">
+        <label class="field">
+          <span>Question</span>
+          <textarea class="input curriculum-textarea" name="learning_text" placeholder="Enter question text" required></textarea>
+        </label>
+        <label class="field">
+          <span>Answer</span>
+          <textarea class="input curriculum-textarea" name="answer_text" placeholder="Enter answer" required></textarea>
+        </label>
+        <button class="button primary" type="submit">Add Question</button>
+      </form>
+    </section>
+  </div>
+
+  <div id="tree-panel" class="curriculum-panel{% if active_tab == 'tree-panel' %} active{% endif %}" role="tabpanel"{% if active_tab != 'tree-panel' %} hidden{% endif %}>
+    <section class="curriculum-section-card">
+      <div class="curriculum-section-head">
+        <div>
+          <p class="stat-label">Structure</p>
+          <h3>Curriculum Tree</h3>
+          <p class="card-subtitle">This shows the full hierarchy from grades down to questions.</p>
+        </div>
+      </div>
+
+      <div class="curriculum-tree">
+        {% for grade in grades %}
+          <details class="tree-grade tree-collapse">
+            <summary class="tree-node-shell">
+              <div class="tree-node-main">
+                <span class="tree-collapse-icon" aria-hidden="true"></span>
+                <div class="tree-level tree-grade-label">{{ grade.grade_name }}</div>
+              </div>
+              <div class="tree-node-actions">
+                <a href="{% url 'ui-teacher-edit-curriculum-item' 'grade' grade.id %}" class="tree-action-link">Edit</a>
+                <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'grade' grade.id %}" onsubmit="return confirm('Delete this grade and all nested items?');">
+                  {% csrf_token %}
+                  <button type="submit" class="tree-action-link danger">Delete</button>
+                </form>
+              </div>
+            </summary>
+
+            {% for lesson in grade.lesson_types.all %}
+              <details class="tree-branch tree-collapse">
+                <summary class="tree-node-shell">
+                  <div class="tree-node-main">
+                    <span class="tree-collapse-icon" aria-hidden="true"></span>
+                    <div class="tree-level tree-lesson-label">Lesson: {{ lesson.lesson_name }}</div>
+                  </div>
+                  <div class="tree-node-actions">
+                    <a href="{% url 'ui-teacher-edit-curriculum-item' 'lesson' lesson.id %}" class="tree-action-link">Edit</a>
+                    <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'lesson' lesson.id %}" onsubmit="return confirm('Delete this lesson and all nested items?');">
+                      {% csrf_token %}
+                      <button type="submit" class="tree-action-link danger">Delete</button>
+                    </form>
+                  </div>
+                </summary>
+
+                {% for sub_lesson in lesson.sub_lessons.all %}
+                  <details class="tree-branch tree-collapse">
+                    <summary class="tree-node-shell">
+                      <div class="tree-node-main">
+                        <span class="tree-collapse-icon" aria-hidden="true"></span>
+                        <div class="tree-level tree-sublesson-label">Track: {{ sub_lesson.sub_lesson_name }}</div>
+                      </div>
+                      <div class="tree-node-actions">
+                        <a href="{% url 'ui-teacher-edit-curriculum-item' 'track' sub_lesson.id %}" class="tree-action-link">Edit</a>
+                        <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'track' sub_lesson.id %}" onsubmit="return confirm('Delete this lesson track and all nested items?');">
+                          {% csrf_token %}
+                          <button type="submit" class="tree-action-link danger">Delete</button>
+                        </form>
+                      </div>
+                    </summary>
+
+                    {% for chapter in sub_lesson.chapters.all %}
+                      <details class="tree-branch tree-collapse">
+                        <summary class="tree-node-shell">
+                          <div class="tree-node-main">
+                            <span class="tree-collapse-icon" aria-hidden="true"></span>
+                            <div class="tree-level tree-chapter-label">Unit: {{ chapter.chapter_name }}</div>
+                          </div>
+                          <div class="tree-node-actions">
+                            <a href="{% url 'ui-teacher-edit-curriculum-item' 'unit' chapter.id %}" class="tree-action-link">Edit</a>
+                            <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'unit' chapter.id %}" onsubmit="return confirm('Delete this unit and all nested items?');">
+                              {% csrf_token %}
+                              <button type="submit" class="tree-action-link danger">Delete</button>
+                            </form>
+                          </div>
+                        </summary>
+
+                        {% if chapter.learnings.all %}
+                          <ul class="learning-list">
+                            {% for learning in chapter.learnings.all %}
+                              <li>
+                                <div class="tree-node-shell">
+                                  <div>
+                                    <div>{{ learning.learning_text }}</div>
+                                    <div class="stat-meta">Answer: {{ learning.answer_text|default:'-' }}</div>
+                                  </div>
+                                  <div class="tree-node-actions">
+                                    <a href="{% url 'ui-teacher-edit-curriculum-item' 'question' learning.id %}" class="tree-action-link">Edit</a>
+                                    <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'question' learning.id %}" onsubmit="return confirm('Delete this question?');">
+                                      {% csrf_token %}
+                                      <button type="submit" class="tree-action-link danger">Delete</button>
+                                    </form>
+                                  </div>
+                                </div>
+                              </li>
+                            {% endfor %}
+                          </ul>
+                        {% else %}
+                          <div class="tree-empty">No questions added yet.</div>
+                        {% endif %}
+                      </details>
+                    {% empty %}
+                      <div class="tree-empty">No units added yet.</div>
+                    {% endfor %}
+                  </details>
+                {% empty %}
+                  <div class="tree-empty">No lesson tracks selected yet.</div>
+                {% endfor %}
+              </details>
+            {% empty %}
+              <div class="tree-empty">No lessons added yet.</div>
+            {% endfor %}
+          </details>
+        {% empty %}
+          <div class="empty-state">No curriculum has been created yet.</div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</section>
+
+<script>
+  (function () {
+    const tabs = document.querySelectorAll('[data-tab-target]');
+    const panels = document.querySelectorAll('.curriculum-panel');
+    const activeTabInputs = document.querySelectorAll('input[name="active_tab"]');
+
+    if (!tabs.length || !panels.length) {
+      return;
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const targetId = tab.getAttribute('data-tab-target');
+
+        tabs.forEach((item) => {
+          item.classList.remove('active');
+          item.setAttribute('aria-selected', 'false');
+        });
+
+        panels.forEach((panel) => {
+          panel.classList.remove('active');
+          panel.hidden = true;
+        });
+
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+
+        const targetPanel = document.getElementById(targetId);
+        if (targetPanel) {
+          targetPanel.hidden = false;
+          targetPanel.classList.add('active');
+        }
+
+        activeTabInputs.forEach((input) => {
+          input.value = targetId;
+        });
+      });
+    });
+
+    function filterOptions(select, matchFn) {
+      if (!select) {
+        return;
+      }
+
+      const options = Array.from(select.querySelectorAll('option'));
+
+      options.forEach((option, index) => {
+        if (index === 0) {
+          option.hidden = false;
+          return;
+        }
+
+        const visible = matchFn(option);
+        option.hidden = !visible;
+      });
+
+      if (select.selectedIndex > 0 && select.options[select.selectedIndex].hidden) {
+        select.value = '';
+      }
+    }
+
+    const chapterGradeFilter = document.getElementById('chapter-grade-filter');
+    const chapterLessonFilter = document.getElementById('chapter-lesson-filter');
+    const chapterSublessonSelect = document.getElementById('chapter-sublesson-select');
+
+    function syncChapterForm() {
+      const gradeId = chapterGradeFilter ? chapterGradeFilter.value : '';
+      const lessonId = chapterLessonFilter ? chapterLessonFilter.value : '';
+
+      filterOptions(chapterLessonFilter, (option) => !gradeId || option.dataset.gradeId === gradeId);
+      filterOptions(
+        chapterSublessonSelect,
+        (option) =>
+          (!gradeId || option.dataset.gradeId === gradeId) &&
+          (!lessonId || option.dataset.lessonId === lessonId)
+      );
+    }
+
+    const learningGradeFilter = document.getElementById('learning-grade-filter');
+    const learningLessonFilter = document.getElementById('learning-lesson-filter');
+    const learningSublessonFilter = document.getElementById('learning-sublesson-filter');
+    const learningChapterFilter = document.getElementById('learning-chapter-filter');
+    const learningUnitSelect = document.getElementById('learning-unit-select');
+
+    function syncLearningForm() {
+      const gradeId = learningGradeFilter ? learningGradeFilter.value : '';
+      const lessonId = learningLessonFilter ? learningLessonFilter.value : '';
+      const sublessonId = learningSublessonFilter ? learningSublessonFilter.value : '';
+      const chapterId = learningChapterFilter ? learningChapterFilter.value : '';
+
+      filterOptions(learningLessonFilter, (option) => !gradeId || option.dataset.gradeId === gradeId);
+      filterOptions(
+        learningSublessonFilter,
+        (option) =>
+          (!gradeId || option.dataset.gradeId === gradeId) &&
+          (!lessonId || option.dataset.lessonId === lessonId)
+      );
+      filterOptions(
+        learningChapterFilter,
+        (option) =>
+          (!gradeId || option.dataset.gradeId === gradeId) &&
+          (!lessonId || option.dataset.lessonId === lessonId) &&
+          (!sublessonId || option.dataset.sublessonId === sublessonId)
+      );
+      if (learningUnitSelect) {
+        learningUnitSelect.value = chapterId;
+      }
+    }
+
+    [chapterGradeFilter, chapterLessonFilter].forEach((element) => element && element.addEventListener('change', syncChapterForm));
+    [learningGradeFilter, learningLessonFilter, learningSublessonFilter, learningChapterFilter].forEach((element) => element && element.addEventListener('change', syncLearningForm));
+
+    syncChapterForm();
+    syncLearningForm();
+  }());
+</script>
+{% endblock %}

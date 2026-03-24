@@ -1,0 +1,61 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Teacher portal roster{% endblock %}
+{% block page_title %}Student Directory{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="toolbar">
+    <div>
+      <h3>Students</h3>
+      <p class="card-subtitle">Browse learner profiles with grade and contact details.</p>
+    </div>
+    <div class="toolbar-actions">
+      <span class="badge">{{ students|length }} students</span>
+      <a href="{% url 'ui-teacher-add-student' %}" class="button primary">Add Student</a>
+    </div>
+  </div>
+
+  <div class="student-card-grid">
+    {% for profile in students %}
+      <article class="student-profile-card">
+        <div class="student-profile-top">
+          <div class="student-photo-slot">
+            {% if profile.profile_photo %}
+              <img src="/media/{{ profile.profile_photo }}" alt="{{ profile.user.name }}" class="student-photo-image">
+            {% else %}
+              <span class="student-photo-initial">{{ profile.first_name|default:profile.user.name|first|default:'S' }}</span>
+            {% endif %}
+          </div>
+          <div class="student-profile-copy">
+            <p class="student-name">{{ profile.first_name|default:'' }} {{ profile.last_name|default:''|cut:'None' }}</p>
+            <p class="student-email">{{ profile.user.email }}</p>
+          </div>
+        </div>
+
+        <div class="student-meta-row">
+          <span class="badge">{{ profile.grade.grade_name|default:'Unassigned' }}</span>
+          <span class="student-photo-note">{{ profile.contact|default:'No contact' }}</span>
+        </div>
+
+        <div class="student-parent-meta">
+          <p>DOB: {{ profile.date_of_birth|date:"d M Y"|default:'-' }}</p>
+          <p>Father: {{ profile.father_name|default:'-' }}</p>
+          <p>Mother: {{ profile.mother_name|default:'-' }}</p>
+        </div>
+
+        <div class="student-card-actions">
+          <a href="{% url 'ui-teacher-create-assignment' %}?student_id={{ profile.user.id }}{% if profile.grade_id %}&grade_id={{ profile.grade_id }}{% endif %}" class="button primary">Assign</a>
+          <a href="{% url 'ui-teacher-edit-student' profile.id %}" class="button secondary">Edit</a>
+          <form method="post" action="{% url 'ui-teacher-delete-student' profile.id %}" onsubmit="return confirm('Remove this student?');">
+            {% csrf_token %}
+            <button type="submit" class="button danger">Remove</button>
+          </form>
+        </div>
+      </article>
+    {% empty %}
+      <div class="empty-state">No students found.</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
