@@ -34,6 +34,11 @@ SECRET_KEY = os.getenv('JWT_SECRET', 'super_secret_change_me')
 DEBUG = False
 # os.getenv('DEBUG', 'true').lower() == 'true'
 # ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.railway.app",
+]
+
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
