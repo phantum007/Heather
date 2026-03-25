@@ -34,18 +34,18 @@ CREATE TABLE IF NOT EXISTS sub_lessons (
     sub_lesson_type_master_id INTEGER REFERENCES sub_lesson_type_master(id) ON DELETE SET NULL
 );
 
--- CHAPTERS
-CREATE TABLE IF NOT EXISTS chapters (
+-- UNITS
+CREATE TABLE IF NOT EXISTS units (
     id SERIAL PRIMARY KEY,
     sub_lesson_id INTEGER NOT NULL REFERENCES sub_lessons(id) ON DELETE CASCADE,
-    chapter_name VARCHAR(120) NOT NULL
+    unit_name VARCHAR(120) NOT NULL
 );
 
--- LEARNINGS
-CREATE TABLE IF NOT EXISTS learnings (
+-- CURRICULUM QUESTIONS
+CREATE TABLE IF NOT EXISTS curriculum_questions (
     id SERIAL PRIMARY KEY,
-    learning_text TEXT NOT NULL,
-    chapter_id INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
+    question_text TEXT NOT NULL,
+    unit_id INTEGER REFERENCES units(id) ON DELETE CASCADE,
     answer_text TEXT
 );
 

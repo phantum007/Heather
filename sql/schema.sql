@@ -48,23 +48,23 @@ CREATE TABLE IF NOT EXISTS sub_lessons (
 ALTER TABLE sub_lessons
   ADD COLUMN IF NOT EXISTS sub_lesson_type_master_id INT REFERENCES sub_lesson_type_master(id) ON DELETE SET NULL;
 
-CREATE TABLE IF NOT EXISTS chapters (
+CREATE TABLE IF NOT EXISTS units (
   id SERIAL PRIMARY KEY,
   sub_lesson_id INT NOT NULL REFERENCES sub_lessons(id) ON DELETE CASCADE,
-  chapter_name VARCHAR(120) NOT NULL
+  unit_name VARCHAR(120) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS learnings (
+CREATE TABLE IF NOT EXISTS curriculum_questions (
   id SERIAL PRIMARY KEY,
-  chapter_id INT REFERENCES chapters(id) ON DELETE CASCADE,
-  learning_text TEXT NOT NULL,
+  unit_id INT REFERENCES units(id) ON DELETE CASCADE,
+  question_text TEXT NOT NULL,
   answer_text TEXT
 );
 
-ALTER TABLE learnings
-  ADD COLUMN IF NOT EXISTS chapter_id INT REFERENCES chapters(id) ON DELETE CASCADE;
+ALTER TABLE curriculum_questions
+  ADD COLUMN IF NOT EXISTS unit_id INT REFERENCES units(id) ON DELETE CASCADE;
 
-ALTER TABLE learnings
+ALTER TABLE curriculum_questions
   ADD COLUMN IF NOT EXISTS answer_text TEXT;
 
 CREATE TABLE IF NOT EXISTS assignments (
@@ -101,9 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_assignments_student ON assignments(student_id);
 CREATE INDEX IF NOT EXISTS idx_questions_assignment ON questions(assignment_id);
 CREATE INDEX IF NOT EXISTS idx_answers_student ON student_answers(student_id);
 CREATE INDEX IF NOT EXISTS idx_sub_lessons_lesson_type ON sub_lessons(lesson_type_id);
-CREATE INDEX IF NOT EXISTS idx_chapters_sub_lesson ON chapters(sub_lesson_id);
+CREATE INDEX IF NOT EXISTS idx_units_sub_lesson ON units(sub_lesson_id);
 
-ALTER TABLE learnings
-  DROP COLUMN IF EXISTS unit_id;
-
-DROP TABLE IF EXISTS units CASCADE;
+ALTER TABLE curriculum_questions
+  DROP COLUMN IF EXISTS chapter_id;

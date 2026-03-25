@@ -16,15 +16,15 @@ from django.views.decorators.http import require_http_methods
 from api.models import (
     AppUser,
     Assignment,
-    Chapter,
+    CurriculumQuestion,
     Grade,
-    Learning,
     LessonType,
     Question,
     StudentAnswer,
     StudentProfile,
     SubLesson,
     SubLessonTypeMaster,
+    Unit,
 )
 
 
@@ -47,13 +47,13 @@ CURRICULUM_ITEM_CONFIG = {
         'label': 'Lesson Track',
     },
     'unit': {
-        'model': Chapter,
-        'field': 'chapter_name',
+        'model': Unit,
+        'field': 'unit_name',
         'label': 'Unit',
     },
     'question': {
-        'model': Learning,
-        'field': 'learning_text',
+        'model': CurriculumQuestion,
+        'field': 'question_text',
         'label': 'Question',
     },
 }
@@ -102,15 +102,15 @@ def _curriculum_name_exists(item_type, value, *, parent_id=None, item=None):
         )
     elif item_type == 'unit':
         unit_parent_id = parent_id if parent_id is not None else getattr(item, 'sub_lesson_id', None)
-        queryset = Chapter.objects.filter(
+        queryset = Unit.objects.filter(
             sub_lesson_id=unit_parent_id,
-            chapter_name__iexact=normalized_value,
+            unit_name__iexact=normalized_value,
         )
     elif item_type == 'question':
-        question_parent_id = parent_id if parent_id is not None else getattr(item, 'chapter_id', None)
-        queryset = Learning.objects.filter(
-            chapter_id=question_parent_id,
-            learning_text__iexact=normalized_value,
+        question_parent_id = parent_id if parent_id is not None else getattr(item, 'unit_id', None)
+        queryset = CurriculumQuestion.objects.filter(
+            unit_id=question_parent_id,
+            question_text__iexact=normalized_value,
         )
     elif item_type == 'track' and item is not None:
         queryset = SubLesson.objects.filter(lesson_type_id=item.lesson_type_id, sub_lesson_name__iexact=normalized_value)
@@ -230,7 +230,7 @@ def teacher_curriculum(request):
         action = request.POST.get('action', '').strip()
         name = request.POST.get('name', '').strip()
         parent_id = request.POST.get('parent_id', '').strip()
-        learning_text = request.POST.get('learning_text', '').strip()
+        question_text = request.POST.get('question_text', '').strip()
         answer_text = request.POST.get('answer_text', '').strip()
         question_order = request.POST.get('order', '').strip()
         sub_lesson_type_ids = request.POST.getlist('sub_lesson_type_ids')
@@ -270,25 +270,25 @@ def teacher_curriculum(request):
                             messages.success(request, f'Lesson added with {len(selected_types)} selected tracks.')
                         else:
                             messages.success(request, 'Lesson added successfully.')
-                elif action == 'add_chapter':
+                elif action == 'add_unit':
                     if not name or not parent_id:
                         messages.error(request, 'Unit name and lesson track are required.')
                     elif _curriculum_name_exists('unit', name, parent_id=int(parent_id)):
                         messages.error(request, 'This unit name already exists for the selected track.')
                     else:
-                        Chapter.objects.create(sub_lesson_id=int(parent_id), chapter_name=name)
+                        Unit.objects.create(sub_lesson_id=int(parent_id), unit_name=name)
                         messages.success(request, 'Unit added successfully.')
-                elif action == 'add_learning':
-                    if not learning_text or not answer_text or not parent_id:
+                elif action == 'add_question':
+                    if not question_text or not answer_text or not parent_id:
                         messages.error(request, 'Question text, answer, and unit are required.')
                     elif question_order and (not question_order.isdigit() or int(question_order) < 1):
                         messages.error(request, 'Order must be a positive number.')
-                    elif _curriculum_name_exists('question', learning_text, parent_id=int(parent_id)):
+                    elif _curriculum_name_exists('question', question_text, parent_id=int(parent_id)):
                         messages.error(request, 'This question already exists for the selected unit.')
                     else:
-                        Learning.objects.create(
-                            chapter_id=int(parent_id),
-                            learning_text=learning_text,
+                        CurriculumQuestion.objects.create(
+                            unit_id=int(parent_id),
+                            question_text=question_text,
                             answer_text=answer_text,
                             order=int(question_order) if question_order else None,
                         )
@@ -301,11 +301,11 @@ def teacher_curriculum(request):
         return redirect(f"{reverse('ui-teacher-curriculum')}?tab={active_tab}")
 
     grades = Grade.objects.prefetch_related(
-        'lesson_types__sub_lessons__chapters__learnings'
+        'lesson_types__sub_lessons__units__curriculum_questions'
     ).order_by('id')
     lessons = LessonType.objects.select_related('grade').order_by('grade_id', 'id')
     sub_lessons = SubLesson.objects.select_related('lesson_type__grade').order_by('lesson_type_id', 'id')
-    chapters = Chapter.objects.select_related('sub_lesson__lesson_type__grade').order_by('sub_lesson_id', 'id')
+    units = Unit.objects.select_related('sub_lesson__lesson_type__grade').order_by('sub_lesson_id', 'id')
     sub_lesson_type_master = SubLessonTypeMaster.objects.order_by('id')
 
     return render(
@@ -316,7 +316,7 @@ def teacher_curriculum(request):
             'grades': grades,
             'lessons': lessons,
             'sub_lessons': sub_lessons,
-            'chapters': chapters,
+            'units': units,
             'sub_lesson_type_master': sub_lesson_type_master,
             'active_tab': active_tab,
         },
@@ -362,13 +362,13 @@ def teacher_edit_curriculum_item(request, item_type, item_id):
                 messages.error(request, 'Question text and answer are required.')
             elif order_value and (not order_value.isdigit() or int(order_value) < 1):
                 messages.error(request, 'Order must be a positive number.')
-            elif _curriculum_name_exists('question', value, parent_id=item.chapter_id, item=item):
+            elif _curriculum_name_exists('question', value, parent_id=item.unit_id, item=item):
                 messages.error(request, 'This question already exists for the selected unit.')
             else:
-                item.learning_text = value
+                item.question_text = value
                 item.answer_text = answer
                 item.order = int(order_value) if order_value else None
-                item.save(update_fields=['learning_text', 'answer_text', 'order'])
+                item.save(update_fields=['question_text', 'answer_text', 'order'])
                 messages.success(request, f'{label} updated successfully.')
                 return redirect('ui-teacher-curriculum')
         else:
@@ -664,7 +664,7 @@ def teacher_create_assignment(request):
     if selected_grade_id:
         lessons = list(
             LessonType.objects.select_related('grade').prefetch_related(
-                'sub_lessons__chapters__learnings'
+                'sub_lessons__units__curriculum_questions'
             ).filter(grade_id=selected_grade_id).order_by('grade_id', 'id')
         )
 
@@ -729,21 +729,21 @@ def teacher_create_assignment(request):
 
         for sub_lesson in lesson.sub_lessons.all():
             units_for_track = []
-            for chapter in sub_lesson.chapters.all():
+            for unit in sub_lesson.units.all():
                 question_items = [
                     {
-                        'id': learning.id,
-                        'order': learning.order,
-                        'text': learning.learning_text,
-                        'answer': learning.answer_text or '',
+                        'id': curriculum_question.id,
+                        'order': curriculum_question.order,
+                        'text': curriculum_question.question_text,
+                        'answer': curriculum_question.answer_text or '',
                     }
-                    for learning in chapter.learnings.all().order_by('order', 'id')
+                    for curriculum_question in unit.curriculum_questions.all().order_by('order', 'id')
                 ]
                 question_count += len(question_items)
                 units_for_track.append(
                     {
-                        'id': chapter.id,
-                        'name': chapter.chapter_name,
+                        'id': unit.id,
+                        'name': unit.unit_name,
                         'questions': question_items,
                     }
                 )

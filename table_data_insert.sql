@@ -35,8 +35,8 @@ INSERT INTO sub_lessons (id, lesson_type_id, sub_lesson_name, sub_lesson_type_ma
 (6, 15, 'Reading Abacus', 1),
 (7, 15, 'Listening Abacus', 2);
 
--- CHAPTERS
-INSERT INTO chapters (id, sub_lesson_id, chapter_name) VALUES
+-- UNITS
+INSERT INTO units (id, sub_lesson_id, unit_name) VALUES
 (3, 3, '1'),
 (4, 3, '2'),
 (5, 4, '1'),
@@ -44,8 +44,8 @@ INSERT INTO chapters (id, sub_lesson_id, chapter_name) VALUES
 (9, 6, '1'),
 (10, 7, '1');
 
--- LEARNINGS
-INSERT INTO learnings (id, learning_text, chapter_id, answer_text) VALUES
+-- CURRICULUM QUESTIONS
+INSERT INTO curriculum_questions (id, question_text, unit_id, answer_text) VALUES
 (4, '1+2+3', 3, '6'),
 (5, '2+1+4', 3, '7'),
 (6, '1+2', 4, '3'),

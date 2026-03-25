@@ -81,23 +81,23 @@ class SubLesson(models.Model):
         managed = False
 
 
-class Chapter(models.Model):
-    sub_lesson = models.ForeignKey(SubLesson, on_delete=models.CASCADE, db_column='sub_lesson_id', related_name='chapters')
-    chapter_name = models.CharField(max_length=120)
+class Unit(models.Model):
+    sub_lesson = models.ForeignKey(SubLesson, on_delete=models.CASCADE, db_column='sub_lesson_id', related_name='units')
+    unit_name = models.CharField(max_length=120)
 
     class Meta:
-        db_table = 'chapters'
+        db_table = 'units'
         managed = False
 
 
-class Learning(models.Model):
-    chapter = models.ForeignKey(Chapter, null=True, blank=True, on_delete=models.CASCADE, db_column='chapter_id', related_name='learnings')
-    learning_text = models.TextField()
+class CurriculumQuestion(models.Model):
+    unit = models.ForeignKey(Unit, null=True, blank=True, on_delete=models.CASCADE, db_column='unit_id', related_name='curriculum_questions')
+    question_text = models.TextField()
     answer_text = models.TextField(null=True, blank=True)
     order = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
-        db_table = 'learnings'
+        db_table = 'curriculum_questions'
         managed = False
 
 

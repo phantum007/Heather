@@ -96,7 +96,7 @@
       </div>
       <form method="post" class="curriculum-form-card">
         {% csrf_token %}
-        <input type="hidden" name="action" value="add_chapter">
+        <input type="hidden" name="action" value="add_unit">
         <input type="hidden" name="active_tab" value="chapter-panel">
         <label class="field">
           <span>Grade</span>
@@ -145,7 +145,7 @@
       </div>
       <form method="post" class="curriculum-form-card">
         {% csrf_token %}
-        <input type="hidden" name="action" value="add_learning">
+        <input type="hidden" name="action" value="add_question">
         <input type="hidden" name="active_tab" value="learning-panel">
         <label class="field">
           <span>Grade</span>
@@ -176,21 +176,20 @@
         </label>
         <label class="field">
           <span>Unit</span>
-          <select class="input" id="learning-chapter-filter">
+          <select class="input" id="learning-unit-filter" name="parent_id" required>
             <option value="">Select Unit</option>
-            {% for chapter in chapters %}
-              <option value="{{ chapter.id }}" data-grade-id="{{ chapter.sub_lesson.lesson_type.grade_id }}" data-lesson-id="{{ chapter.sub_lesson.lesson_type_id }}" data-sublesson-id="{{ chapter.sub_lesson_id }}">{{ chapter.sub_lesson.lesson_type.grade.grade_name }} -> {{ chapter.sub_lesson.lesson_type.lesson_name }} -> {{ chapter.sub_lesson.sub_lesson_name }} -> {{ chapter.chapter_name }}</option>
+            {% for unit in units %}
+              <option value="{{ unit.id }}" data-grade-id="{{ unit.sub_lesson.lesson_type.grade_id }}" data-lesson-id="{{ unit.sub_lesson.lesson_type_id }}" data-sublesson-id="{{ unit.sub_lesson_id }}">{{ unit.sub_lesson.lesson_type.grade.grade_name }} -> {{ unit.sub_lesson.lesson_type.lesson_name }} -> {{ unit.sub_lesson.sub_lesson_name }} -> {{ unit.unit_name }}</option>
             {% endfor %}
           </select>
         </label>
-        <input type="hidden" id="learning-unit-select" name="parent_id">
         <label class="field">
           <span>Order</span>
           <input class="input" type="number" name="order" min="1" placeholder="Enter question order">
         </label>
         <label class="field">
           <span>Question</span>
-          <textarea class="input curriculum-textarea" name="learning_text" placeholder="Enter question text" required></textarea>
+          <textarea class="input curriculum-textarea" name="question_text" placeholder="Enter question text" required></textarea>
         </label>
         <label class="field">
           <span>Answer</span>
@@ -260,34 +259,34 @@
                       </div>
                     </summary>
 
-                    {% for chapter in sub_lesson.chapters.all %}
+                    {% for unit in sub_lesson.units.all %}
                       <details class="tree-branch tree-collapse">
                         <summary class="tree-node-shell">
                           <div class="tree-node-main">
                             <span class="tree-collapse-icon" aria-hidden="true"></span>
-                            <div class="tree-level tree-chapter-label">Unit: {{ chapter.chapter_name }}</div>
+                            <div class="tree-level tree-chapter-label">Unit: {{ unit.unit_name }}</div>
                           </div>
                           <div class="tree-node-actions">
-                            <a href="{% url 'ui-teacher-edit-curriculum-item' 'unit' chapter.id %}" class="tree-action-link">Edit</a>
-                            <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'unit' chapter.id %}" onsubmit="return confirm('Delete this unit and all nested items?');">
+                            <a href="{% url 'ui-teacher-edit-curriculum-item' 'unit' unit.id %}" class="tree-action-link">Edit</a>
+                            <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'unit' unit.id %}" onsubmit="return confirm('Delete this unit and all nested items?');">
                               {% csrf_token %}
                               <button type="submit" class="tree-action-link danger">Delete</button>
                             </form>
                           </div>
                         </summary>
 
-                        {% if chapter.learnings.all %}
+                        {% if unit.curriculum_questions.all %}
                           <ul class="learning-list">
-                            {% for learning in chapter.learnings.all|dictsort:"order" %}
+                            {% for question in unit.curriculum_questions.all|dictsort:"order" %}
                               <li>
                                 <div class="tree-node-shell">
                                   <div>
-                                    <div>{% if learning.order %}<strong>#{{ learning.order }}</strong> {% endif %}{{ learning.learning_text }}</div>
-                                    <div class="stat-meta">Answer: {{ learning.answer_text|default:'-' }}</div>
+                                    <div>{% if question.order %}<strong>#{{ question.order }}</strong> {% endif %}{{ question.question_text }}</div>
+                                    <div class="stat-meta">Answer: {{ question.answer_text|default:'-' }}</div>
                                   </div>
                                   <div class="tree-node-actions">
-                                    <a href="{% url 'ui-teacher-edit-curriculum-item' 'question' learning.id %}" class="tree-action-link">Edit</a>
-                                    <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'question' learning.id %}" onsubmit="return confirm('Delete this question?');">
+                                    <a href="{% url 'ui-teacher-edit-curriculum-item' 'question' question.id %}" class="tree-action-link">Edit</a>
+                                    <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'question' question.id %}" onsubmit="return confirm('Delete this question?');">
                                       {% csrf_token %}
                                       <button type="submit" class="tree-action-link danger">Delete</button>
                                     </form>
@@ -385,7 +384,7 @@
     const chapterLessonFilter = document.getElementById('chapter-lesson-filter');
     const chapterSublessonSelect = document.getElementById('chapter-sublesson-select');
 
-    function syncChapterForm() {
+    function syncUnitForm() {
       const gradeId = chapterGradeFilter ? chapterGradeFilter.value : '';
       const lessonId = chapterLessonFilter ? chapterLessonFilter.value : '';
 
@@ -401,14 +400,13 @@
     const learningGradeFilter = document.getElementById('learning-grade-filter');
     const learningLessonFilter = document.getElementById('learning-lesson-filter');
     const learningSublessonFilter = document.getElementById('learning-sublesson-filter');
-    const learningChapterFilter = document.getElementById('learning-chapter-filter');
-    const learningUnitSelect = document.getElementById('learning-unit-select');
+    const learningUnitFilter = document.getElementById('learning-unit-filter');
 
-    function syncLearningForm() {
+    function syncQuestionForm() {
       const gradeId = learningGradeFilter ? learningGradeFilter.value : '';
       const lessonId = learningLessonFilter ? learningLessonFilter.value : '';
       const sublessonId = learningSublessonFilter ? learningSublessonFilter.value : '';
-      const chapterId = learningChapterFilter ? learningChapterFilter.value : '';
+      const unitId = learningUnitFilter ? learningUnitFilter.value : '';
 
       filterOptions(learningLessonFilter, (option) => !gradeId || option.dataset.gradeId === gradeId);
       filterOptions(
@@ -418,22 +416,19 @@
           (!lessonId || option.dataset.lessonId === lessonId)
       );
       filterOptions(
-        learningChapterFilter,
+        learningUnitFilter,
         (option) =>
           (!gradeId || option.dataset.gradeId === gradeId) &&
           (!lessonId || option.dataset.lessonId === lessonId) &&
           (!sublessonId || option.dataset.sublessonId === sublessonId)
       );
-      if (learningUnitSelect) {
-        learningUnitSelect.value = chapterId;
-      }
     }
 
-    [chapterGradeFilter, chapterLessonFilter].forEach((element) => element && element.addEventListener('change', syncChapterForm));
-    [learningGradeFilter, learningLessonFilter, learningSublessonFilter, learningChapterFilter].forEach((element) => element && element.addEventListener('change', syncLearningForm));
+    [chapterGradeFilter, chapterLessonFilter].forEach((element) => element && element.addEventListener('change', syncUnitForm));
+    [learningGradeFilter, learningLessonFilter, learningSublessonFilter, learningUnitFilter].forEach((element) => element && element.addEventListener('change', syncQuestionForm));
 
-    syncChapterForm();
-    syncLearningForm();
+    syncUnitForm();
+    syncQuestionForm();
   }());
 </script>
 {% endblock %}

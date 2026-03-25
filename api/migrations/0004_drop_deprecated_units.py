@@ -31,10 +31,6 @@ class Migration(migrations.Migration):
                 ),
             ],
             state_operations=[
-                migrations.RemoveField(
-                    model_name='learning',
-                    name='unit',
-                ),
                 migrations.DeleteModel(
                     name='Unit',
                 ),
