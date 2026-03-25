@@ -5,9 +5,13 @@
 {% block body %}
 <div class="login-shell">
   <div class="login-card">
-    <p class="eyebrow">Django UI</p>
-    <h1>Abacus Portal</h1>
-    <p class="subcopy">Sign in with your teacher or student account to open the Django-rendered workspace.</p>
+    <div class="login-brand">
+      {% include 'ui/partials/brand_logo.svg' %}
+      <div>
+        <h1>Abacus Mental</h1>
+      </div>
+    </div>
+    <p class="subcopy">Sign in with your account to open the workspace.</p>
 
     {% if messages %}
       {% for message in messages %}

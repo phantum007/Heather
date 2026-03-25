@@ -1,0 +1,21 @@
+<svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="brand-logo">
+  <rect width="256" height="256" rx="56" fill="url(#brandBg)"/>
+  <rect x="46" y="40" width="164" height="176" rx="28" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.46)" stroke-width="8"/>
+  <rect x="80" y="76" width="96" height="10" rx="5" fill="#E6F6FF"/>
+  <rect x="80" y="118" width="96" height="10" rx="5" fill="#E6F6FF"/>
+  <rect x="80" y="160" width="96" height="10" rx="5" fill="#E6F6FF"/>
+  <circle cx="102" cy="81" r="15" fill="#F97316"/>
+  <circle cx="154" cy="81" r="15" fill="#38BDF8"/>
+  <circle cx="128" cy="123" r="15" fill="#FB7185"/>
+  <circle cx="102" cy="165" r="15" fill="#38BDF8"/>
+  <circle cx="154" cy="165" r="15" fill="#F97316"/>
+  <path d="M96 198L128 58L160 198" stroke="rgba(255,255,255,0.92)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M108 146H148" stroke="rgba(255,255,255,0.92)" stroke-width="10" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="brandBg" x1="30" y1="22" x2="220" y2="230" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="0.55" stop-color="#0F766E"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+  </defs>
+</svg>
