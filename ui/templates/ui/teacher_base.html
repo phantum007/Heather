@@ -25,6 +25,7 @@
       <a href="{% url 'ui-teacher-curriculum' %}" class="{% if '/teacher/curriculum/' in request.path %}active{% endif %}">Curriculum</a>
       <a href="{% url 'ui-teacher-create-assignment' %}" class="{% if '/teacher/create-assignment/' in request.path %}active{% endif %}">Assignments</a>
       <a href="{% url 'ui-teacher-results' %}" class="{% if '/teacher/results/' in request.path %}active{% endif %}">Leaderboard</a>
+      <a href="{% url 'ui-teacher-profile' %}" class="{% if '/teacher/profile/' in request.path %}active{% endif %}">Profile</a>
     </nav>
 
     <a href="{% url 'ui-logout' %}" class="button ghost full">Sign Out</a>

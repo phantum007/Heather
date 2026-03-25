@@ -25,7 +25,6 @@ from api.models import (
     StudentProfile,
     SubLesson,
     SubLessonTypeMaster,
-    Unit,
 )
 
 
@@ -233,6 +232,7 @@ def teacher_curriculum(request):
         parent_id = request.POST.get('parent_id', '').strip()
         learning_text = request.POST.get('learning_text', '').strip()
         answer_text = request.POST.get('answer_text', '').strip()
+        question_order = request.POST.get('order', '').strip()
         sub_lesson_type_ids = request.POST.getlist('sub_lesson_type_ids')
         active_tab = request.POST.get('active_tab', 'grade-panel').strip() or 'grade-panel'
 
@@ -281,6 +281,8 @@ def teacher_curriculum(request):
                 elif action == 'add_learning':
                     if not learning_text or not answer_text or not parent_id:
                         messages.error(request, 'Question text, answer, and unit are required.')
+                    elif question_order and (not question_order.isdigit() or int(question_order) < 1):
+                        messages.error(request, 'Order must be a positive number.')
                     elif _curriculum_name_exists('question', learning_text, parent_id=int(parent_id)):
                         messages.error(request, 'This question already exists for the selected unit.')
                     else:
@@ -288,6 +290,7 @@ def teacher_curriculum(request):
                             chapter_id=int(parent_id),
                             learning_text=learning_text,
                             answer_text=answer_text,
+                            order=int(question_order) if question_order else None,
                         )
                         messages.success(request, 'Question added successfully.')
                 else:
@@ -354,14 +357,18 @@ def teacher_edit_curriculum_item(request, item_type, item_id):
         if item_type == 'question':
             value = request.POST.get('value', '').strip()
             answer = request.POST.get('answer', '').strip()
+            order_value = request.POST.get('order', '').strip()
             if not value or not answer:
                 messages.error(request, 'Question text and answer are required.')
+            elif order_value and (not order_value.isdigit() or int(order_value) < 1):
+                messages.error(request, 'Order must be a positive number.')
             elif _curriculum_name_exists('question', value, parent_id=item.chapter_id, item=item):
                 messages.error(request, 'This question already exists for the selected unit.')
             else:
                 item.learning_text = value
                 item.answer_text = answer
-                item.save(update_fields=['learning_text', 'answer_text'])
+                item.order = int(order_value) if order_value else None
+                item.save(update_fields=['learning_text', 'answer_text', 'order'])
                 messages.success(request, f'{label} updated successfully.')
                 return redirect('ui-teacher-curriculum')
         else:
@@ -390,6 +397,7 @@ def teacher_edit_curriculum_item(request, item_type, item_id):
             'item_label': label,
             'item_value': getattr(item, field_name),
             'item_answer': item.answer_text if item_type == 'question' else '',
+            'item_order': item.order if item_type == 'question' else '',
             'item_type': item_type,
         },
     )
@@ -520,10 +528,19 @@ def teacher_edit_student(request, student_id):
                 profile.father_name = father_name
                 profile.mother_name = mother_name
                 profile.contact = contact
-                profile.grade_id = int(grade_id) if grade_id else None
+                new_grade_id = int(grade_id) if grade_id else None
+                previous_grade_id = profile.grade_id
+
+                if previous_grade_id != new_grade_id:
+                    Assignment.objects.filter(student_id=profile.user_id).delete()
+
+                profile.grade_id = new_grade_id
                 profile.save()
 
-            messages.success(request, 'Student updated successfully.')
+            if previous_grade_id != new_grade_id:
+                messages.success(request, 'Student updated successfully. Old assignments were cleared for the new grade.')
+            else:
+                messages.success(request, 'Student updated successfully.')
             return redirect('ui-teacher-students')
 
     return render(
@@ -553,6 +570,55 @@ def teacher_delete_student(request, student_id):
 
 
 @require_http_methods(['GET', 'POST'])
+def teacher_profile(request):
+    user, response = _teacher_guard(request)
+    if response:
+        return response
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        email = request.POST.get('email', '').strip().lower()
+        current_password = request.POST.get('current_password', '')
+        new_password = request.POST.get('new_password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+
+        if not name or not email:
+            messages.error(request, 'Name and email are required.')
+        elif AppUser.objects.exclude(id=user.id).filter(email=email).exists():
+            messages.error(request, 'A user with that email already exists.')
+        elif new_password or confirm_password or current_password:
+            if not current_password:
+                messages.error(request, 'Current password is required to set a new password.')
+            elif not bcrypt.checkpw(current_password.encode('utf-8'), user.password.encode('utf-8')):
+                messages.error(request, 'Current password is incorrect.')
+            elif not new_password:
+                messages.error(request, 'New password is required.')
+            elif new_password != confirm_password:
+                messages.error(request, 'New password and confirm password must match.')
+            else:
+                user.name = name
+                user.email = email
+                user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                user.save(update_fields=['name', 'email', 'password'])
+                messages.success(request, 'Profile and password updated successfully.')
+                return redirect('ui-teacher-profile')
+        else:
+            user.name = name
+            user.email = email
+            user.save(update_fields=['name', 'email'])
+            messages.success(request, 'Profile updated successfully.')
+            return redirect('ui-teacher-profile')
+
+    return render(
+        request,
+        'ui/teacher_profile.html',
+        {
+            'current_user': user,
+        },
+    )
+
+
+@require_http_methods(['GET', 'POST'])
 def teacher_create_assignment(request):
     user, response = _teacher_guard(request)
     if response:
@@ -560,12 +626,6 @@ def teacher_create_assignment(request):
 
     students = StudentProfile.objects.select_related('user', 'grade').order_by('user__name')
     grades = Grade.objects.prefetch_related('lesson_types').order_by('id')
-    lessons = list(
-        LessonType.objects.select_related('grade').prefetch_related(
-            'sub_lessons__chapters__learnings'
-        ).order_by('grade_id', 'id')
-    )
-
     source = request.POST if request.method == 'POST' else request.GET
     selected_student_id = source.get('student_id', '').strip()
     selected_grade_id = source.get('grade_id', '').strip()
@@ -573,11 +633,40 @@ def teacher_create_assignment(request):
     assignment_kind = source.get('assignment_kind', Assignment.KIND_HOMEWORK).strip() or Assignment.KIND_HOMEWORK
     today_value = timezone.localdate().isoformat()
     available_on = source.get('available_on', '').strip() or today_value
+    selected_student = next((profile for profile in students if str(profile.user_id) == str(selected_student_id)), None)
+    latest_assignment = None
+    summary_lessons = []
+
+    if selected_student_id:
+        latest_assignment = (
+            Assignment.objects.filter(student_id=int(selected_student_id))
+            .select_related('lesson__grade', 'teacher')
+            .order_by('-assigned_date', '-id')
+            .first()
+        )
 
     if selected_student_id and not selected_grade_id:
-        selected_profile = next((profile for profile in students if str(profile.user_id) == str(selected_student_id)), None)
-        if selected_profile and selected_profile.grade_id:
-            selected_grade_id = str(selected_profile.grade_id)
+        if latest_assignment:
+            selected_grade_id = str(latest_assignment.lesson.grade_id)
+        elif selected_student and selected_student.grade_id:
+            selected_grade_id = str(selected_student.grade_id)
+
+    if request.method == 'GET' and selected_student_id and selected_grade_id and not selected_lesson_ids:
+        selected_lesson_ids = [
+            str(lesson_id)
+            for lesson_id in Assignment.objects.filter(
+                student_id=int(selected_student_id),
+                lesson__grade_id=int(selected_grade_id),
+            ).order_by('lesson_id').values_list('lesson_id', flat=True).distinct()
+        ]
+
+    lessons = []
+    if selected_grade_id:
+        lessons = list(
+            LessonType.objects.select_related('grade').prefetch_related(
+                'sub_lessons__chapters__learnings'
+            ).filter(grade_id=selected_grade_id).order_by('grade_id', 'id')
+        )
 
     if request.method == 'POST':
         if assignment_kind != Assignment.KIND_CLASSROOM:
@@ -589,20 +678,46 @@ def teacher_create_assignment(request):
             messages.error(request, 'Classroom lesson requires an availability date.')
         else:
             with transaction.atomic():
+                selected_lesson_ids_int = [int(lesson_id) for lesson_id in selected_lesson_ids]
+                removed_previous_grade_count = Assignment.objects.filter(
+                    student_id=int(selected_student_id),
+                ).exclude(
+                    lesson__grade_id=int(selected_grade_id),
+                ).delete()[0]
+                replaced_count = Assignment.objects.filter(
+                    student_id=int(selected_student_id),
+                    lesson__grade_id=int(selected_grade_id),
+                ).delete()[0]
                 assignments_to_create = []
-                for lesson_id in selected_lesson_ids:
+                for lesson_id in selected_lesson_ids_int:
                     assignments_to_create.append(
                         Assignment(
                             teacher_id=user.id,
                             student_id=int(selected_student_id),
-                            lesson_id=int(lesson_id),
+                            lesson_id=lesson_id,
                             assigned_date=timezone.now(),
                             assignment_kind=assignment_kind,
                             available_on=available_on or None,
                         )
                     )
                 Assignment.objects.bulk_create(assignments_to_create)
-            messages.success(request, f'{len(selected_lesson_ids)} lesson(s) assigned successfully.')
+            if removed_previous_grade_count and replaced_count:
+                messages.success(
+                    request,
+                    f'{len(selected_lesson_ids_int)} lesson(s) assigned successfully. Previous-grade lessons were removed and matching lesson assignments were replaced.',
+                )
+            elif removed_previous_grade_count:
+                messages.success(
+                    request,
+                    f'{len(selected_lesson_ids_int)} lesson(s) assigned successfully. Previous-grade lessons were removed for this student.',
+                )
+            elif replaced_count:
+                messages.success(
+                    request,
+                    f'{len(selected_lesson_ids_int)} lesson(s) assigned successfully. Existing lesson assignments were replaced.',
+                )
+            else:
+                messages.success(request, f'{len(selected_lesson_ids_int)} lesson(s) assigned successfully.')
             redirect_url = f"{reverse('ui-teacher-create-assignment')}?student_id={selected_student_id}&grade_id={selected_grade_id}"
             return redirect(redirect_url)
 
@@ -618,10 +733,11 @@ def teacher_create_assignment(request):
                 question_items = [
                     {
                         'id': learning.id,
+                        'order': learning.order,
                         'text': learning.learning_text,
                         'answer': learning.answer_text or '',
                     }
-                    for learning in chapter.learnings.all()
+                    for learning in chapter.learnings.all().order_by('order', 'id')
                 ]
                 question_count += len(question_items)
                 units_for_track.append(
@@ -653,9 +769,26 @@ def teacher_create_assignment(request):
             }
         )
 
-    selected_student = next((profile for profile in students if str(profile.user_id) == str(selected_student_id)), None)
     selected_grade = next((grade for grade in grades if str(grade.id) == str(selected_grade_id)), None)
     selected_lessons = [item for item in lesson_options if str(item['id']) in selected_lesson_ids]
+
+    if latest_assignment:
+        summary_lessons = list(
+            LessonType.objects.filter(
+                assignments__student_id=int(selected_student_id),
+                grade_id=latest_assignment.lesson.grade_id,
+            )
+            .order_by('id')
+            .distinct()
+        )
+
+    summary_grade_name = latest_assignment.lesson.grade.grade_name if latest_assignment else (selected_student.grade.grade_name if selected_student and selected_student.grade else None)
+    summary_assignment_kind = latest_assignment.assignment_kind if latest_assignment else assignment_kind
+    summary_available_on = (
+        latest_assignment.available_on.isoformat()
+        if latest_assignment and latest_assignment.available_on
+        else available_on
+    )
 
     return render(
         request,
@@ -674,6 +807,10 @@ def teacher_create_assignment(request):
             'selected_student': selected_student,
             'selected_grade': selected_grade,
             'selected_lessons': selected_lessons,
+            'summary_grade_name': summary_grade_name,
+            'summary_assignment_kind': summary_assignment_kind,
+            'summary_available_on': summary_available_on,
+            'summary_lessons': summary_lessons,
         },
     )
 
@@ -691,20 +828,30 @@ def teacher_results(request):
     selected_result = None
 
     if selected_student_id:
+        selected_profile = StudentProfile.objects.select_related('grade').filter(user_id=selected_student_id).first()
         submitted_answers = StudentAnswer.objects.filter(
             question__assignment_id=OuterRef('pk'),
             student_id=selected_student_id,
         )
+        assignments_queryset = Assignment.objects.filter(student_id=selected_student_id)
+        if selected_profile and selected_profile.grade_id:
+            assignments_queryset = assignments_queryset.filter(lesson__grade_id=selected_profile.grade_id)
         assignments = list(
-            Assignment.objects.filter(student_id=selected_student_id)
+            assignments_queryset
             .select_related('lesson__grade', 'teacher')
             .annotate(is_submitted=Exists(submitted_answers))
             .order_by('-assigned_date')
         )
 
     if selected_assignment_id:
+        assignment_queryset = Assignment.objects.select_related('student', 'lesson__grade').prefetch_related('questions__answers')
+        if selected_student_id:
+            assignment_queryset = assignment_queryset.filter(student_id=selected_student_id)
+        selected_profile = StudentProfile.objects.select_related('grade').filter(user_id=selected_student_id).first()
+        if selected_profile and selected_profile.grade_id:
+            assignment_queryset = assignment_queryset.filter(lesson__grade_id=selected_profile.grade_id)
         assignment = get_object_or_404(
-            Assignment.objects.select_related('student', 'lesson__grade').prefetch_related('questions__answers'),
+            assignment_queryset,
             id=selected_assignment_id,
         )
         questions = []
@@ -755,11 +902,14 @@ def student_dashboard(request):
         question__assignment_id=OuterRef('pk'),
         student_id=user.id,
     )
+    assignments_queryset = Assignment.objects.filter(student_id=user.id).filter(
+        Q(assignment_kind=Assignment.KIND_HOMEWORK) |
+        Q(assignment_kind=Assignment.KIND_CLASSROOM, available_on=today)
+    )
+    if profile and profile.grade_id:
+        assignments_queryset = assignments_queryset.filter(lesson__grade_id=profile.grade_id)
     assignments = list(
-        Assignment.objects.filter(student_id=user.id).filter(
-            Q(assignment_kind=Assignment.KIND_HOMEWORK) |
-            Q(assignment_kind=Assignment.KIND_CLASSROOM, available_on=today)
-        )
+        assignments_queryset
         .select_related('lesson__grade', 'teacher')
         .annotate(is_submitted=Exists(submitted_answers))
         .order_by('-assigned_date')
@@ -798,11 +948,14 @@ def student_assignments(request):
         question__assignment_id=OuterRef('pk'),
         student_id=user.id,
     )
+    assignments_queryset = Assignment.objects.filter(student_id=user.id).filter(
+        Q(assignment_kind=Assignment.KIND_HOMEWORK) |
+        Q(assignment_kind=Assignment.KIND_CLASSROOM, available_on=today)
+    )
+    if profile and profile.grade_id:
+        assignments_queryset = assignments_queryset.filter(lesson__grade_id=profile.grade_id)
     assignments = list(
-        Assignment.objects.filter(student_id=user.id).filter(
-            Q(assignment_kind=Assignment.KIND_HOMEWORK) |
-            Q(assignment_kind=Assignment.KIND_CLASSROOM, available_on=today)
-        )
+        assignments_queryset
         .select_related('lesson__grade', 'teacher')
         .annotate(is_submitted=Exists(submitted_answers))
         .order_by('-assigned_date')
@@ -811,10 +964,14 @@ def student_assignments(request):
     selected_assignment = None
     assignment_detail = None
     if selected_assignment_id:
-        selected_assignment = get_object_or_404(
-            Assignment.objects.select_related('lesson__grade', 'teacher').prefetch_related('questions__answers'),
-            id=selected_assignment_id,
+        selected_assignment_queryset = Assignment.objects.select_related('lesson__grade', 'teacher').prefetch_related('questions__answers').filter(
             student_id=user.id,
+        )
+        if profile and profile.grade_id:
+            selected_assignment_queryset = selected_assignment_queryset.filter(lesson__grade_id=profile.grade_id)
+        selected_assignment = get_object_or_404(
+            selected_assignment_queryset,
+            id=selected_assignment_id,
         )
         questions = []
         correct = 0

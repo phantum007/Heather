@@ -15,6 +15,12 @@
 
   <form method="post" class="curriculum-form-card">
     {% csrf_token %}
+    {% if item_type == 'question' %}
+      <label class="field">
+        <span>Order</span>
+        <input class="input" type="number" name="order" min="1" value="{{ item_order }}" placeholder="Enter question order">
+      </label>
+    {% endif %}
     <label class="field">
       <span>{{ item_label }}</span>
       {% if item_type == 'question' %}

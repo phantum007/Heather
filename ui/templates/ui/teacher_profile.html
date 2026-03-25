@@ -1,0 +1,52 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Teacher settings{% endblock %}
+{% block page_title %}Profile{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="toolbar">
+    <div>
+      <h3>Update Profile</h3>
+      <p class="card-subtitle">Edit your teacher details and change your password when needed.</p>
+    </div>
+    <span class="badge">Account</span>
+  </div>
+
+  <form method="post" class="onboard-grid">
+    {% csrf_token %}
+
+    <label class="field">
+      <span>Name</span>
+      <input class="input" type="text" name="name" value="{{ current_user.name }}" required>
+    </label>
+
+    <label class="field">
+      <span>Email</span>
+      <input class="input" type="email" name="email" value="{{ current_user.email }}" required>
+    </label>
+
+    <div></div>
+
+    <label class="field">
+      <span>Current Password</span>
+      <input class="input" type="password" name="current_password" placeholder="Required only when changing password">
+      <small class="field-note">Leave password fields blank if you only want to update profile details.</small>
+    </label>
+
+    <label class="field">
+      <span>New Password</span>
+      <input class="input" type="password" name="new_password" placeholder="Enter new password">
+    </label>
+
+    <label class="field">
+      <span>Confirm Password</span>
+      <input class="input" type="password" name="confirm_password" placeholder="Re-enter new password">
+    </label>
+
+    <div class="onboard-actions">
+      <button class="button primary" type="submit">Save Profile</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

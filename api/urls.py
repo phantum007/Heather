@@ -12,12 +12,14 @@ from .views import (
     RegisterView,
     StudentsView,
     SubmitAnswersView,
+    TeacherProfileView,
 )
 
 urlpatterns = [
     path('health', HealthView.as_view()),
     path('login', LoginView.as_view()),
     path('register', RegisterView.as_view()),
+    path('teacher/profile', TeacherProfileView.as_view()),
     path('students', StudentsView.as_view()),
     path('grades-lessons', GradesLessonsView.as_view()),
     path('assignments', CreateAssignmentView.as_view()),

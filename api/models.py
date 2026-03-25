@@ -90,20 +90,11 @@ class Chapter(models.Model):
         managed = False
 
 
-class Unit(models.Model):
-    chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE, db_column='chapter_id', related_name='units')
-    unit_name = models.CharField(max_length=120)
-
-    class Meta:
-        db_table = 'units'
-        managed = False
-
-
 class Learning(models.Model):
-    unit = models.ForeignKey(Unit, null=True, blank=True, on_delete=models.CASCADE, db_column='unit_id', related_name='learnings')
     chapter = models.ForeignKey(Chapter, null=True, blank=True, on_delete=models.CASCADE, db_column='chapter_id', related_name='learnings')
     learning_text = models.TextField()
     answer_text = models.TextField(null=True, blank=True)
+    order = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = 'learnings'
@@ -134,6 +125,7 @@ class Question(models.Model):
     assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, db_column='assignment_id', related_name='questions')
     question_text = models.TextField()
     correct_answer = models.CharField(max_length=120)
+    order = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = 'questions'

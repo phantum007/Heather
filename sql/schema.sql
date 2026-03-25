@@ -54,15 +54,8 @@ CREATE TABLE IF NOT EXISTS chapters (
   chapter_name VARCHAR(120) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS units (
-  id SERIAL PRIMARY KEY,
-  chapter_id INT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
-  unit_name VARCHAR(120) NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS learnings (
   id SERIAL PRIMARY KEY,
-  unit_id INT REFERENCES units(id) ON DELETE CASCADE,
   chapter_id INT REFERENCES chapters(id) ON DELETE CASCADE,
   learning_text TEXT NOT NULL,
   answer_text TEXT
@@ -73,9 +66,6 @@ ALTER TABLE learnings
 
 ALTER TABLE learnings
   ADD COLUMN IF NOT EXISTS answer_text TEXT;
-
-ALTER TABLE learnings
-  ALTER COLUMN unit_id DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS assignments (
   id SERIAL PRIMARY KEY,
@@ -112,5 +102,8 @@ CREATE INDEX IF NOT EXISTS idx_questions_assignment ON questions(assignment_id);
 CREATE INDEX IF NOT EXISTS idx_answers_student ON student_answers(student_id);
 CREATE INDEX IF NOT EXISTS idx_sub_lessons_lesson_type ON sub_lessons(lesson_type_id);
 CREATE INDEX IF NOT EXISTS idx_chapters_sub_lesson ON chapters(sub_lesson_id);
-CREATE INDEX IF NOT EXISTS idx_units_chapter ON units(chapter_id);
-CREATE INDEX IF NOT EXISTS idx_learnings_unit ON learnings(unit_id);
+
+ALTER TABLE learnings
+  DROP COLUMN IF EXISTS unit_id;
+
+DROP TABLE IF EXISTS units CASCADE;

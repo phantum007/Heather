@@ -58,7 +58,7 @@
       </label>
 
       <label class="field" id="assignment-date-field">
-        <span>Available On</span>
+        <span>Available from</span>
         <input class="input" id="assignment-date-input" type="date" name="available_on" value="{{ available_on|default:today_value }}">
         <span class="field-note" id="assignment-date-note">Homework uses today's date. Classroom lessons can be scheduled.</span>
       </label>
@@ -98,6 +98,10 @@
         </div>
       </div>
 
+      {% if not selected_grade_id %}
+        <div class="empty-state" id="lesson-grade-empty-state">Select a grade to load lessons.</div>
+      {% endif %}
+
       <div class="lesson-checkbox-list" id="lesson-checkbox-list">
         {% for lesson in lesson_options %}
           <label class="lesson-checkbox-card" data-grade-id="{{ lesson.grade_id }}">
@@ -127,7 +131,7 @@
             </button>
           </label>
         {% empty %}
-          <div class="empty-state">No lessons available yet. Please add curriculum lessons first.</div>
+          <div class="empty-state" id="lesson-empty-state">{% if selected_grade_id %}No lessons available yet for this grade. Please add curriculum lessons first.{% else %}No lessons loaded yet.{% endif %}</div>
         {% endfor %}
       </div>
     </div>
@@ -141,26 +145,30 @@
         </div>
         <div>
           <p class="stat-label">Type</p>
-          <p class="assignment-summary-value">{% if assignment_kind == 'classroom' %}Classroom Lesson{% else %}Homework{% endif %}</p>
+          <p class="assignment-summary-value">{% if summary_assignment_kind == 'classroom' %}Classroom Lesson{% else %}Homework{% endif %}</p>
         </div>
         <div>
-          <p class="stat-label">Available On</p>
-          <p class="assignment-summary-value">{{ available_on|default:today_value }}</p>
+          <p class="stat-label">Available from</p>
+          <p class="assignment-summary-value">{{ summary_available_on|default:today_value }}</p>
         </div>
         <div>
           <p class="stat-label">Grade</p>
-          <p class="assignment-summary-value">{{ selected_grade.grade_name|default:'Not selected yet' }}</p>
+          <p class="assignment-summary-value">{{ summary_grade_name|default:'Not selected yet' }}</p>
         </div>
         <div>
           <p class="stat-label">Lessons</p>
-          <p class="assignment-summary-value">{{ selected_lessons|length }}</p>
-        </div>
-        <div>
-          <p class="stat-label">Save Mode</p>
-          <p class="assignment-summary-value">Student to lesson mapping</p>
+          <p class="assignment-summary-value">{{ summary_lessons|length }}</p>
+          <p class="field-note">
+            {% if summary_lessons %}
+              {% for lesson in summary_lessons %}
+                {{ lesson.lesson_name }}{% if not forloop.last %}, {% endif %}
+              {% endfor %}
+            {% else %}
+              No lessons selected yet
+            {% endif %}
+          </p>
         </div>
       </div>
-      <p class="placeholder-copy">Each selected lesson will be saved as its own assignment row for the chosen student.</p>
     </div>
 
     <div class="toolbar-actions">
@@ -231,9 +239,41 @@
     const countNode = document.getElementById('selected-lesson-count');
     const selectAllButton = document.getElementById('select-all-lessons');
     const clearAllButton = document.getElementById('clear-all-lessons');
+    const gradeEmptyState = document.getElementById('lesson-grade-empty-state');
+    const lessonEmptyState = document.getElementById('lesson-empty-state');
     const modalTriggers = Array.from(document.querySelectorAll('[data-lesson-modal-trigger]'));
     const modalCloseButtons = Array.from(document.querySelectorAll('[data-close-lesson-modal]'));
     const modals = Array.from(document.querySelectorAll('.dialog-backdrop'));
+
+    function reloadForStudentSelection() {
+      const params = new URLSearchParams();
+
+      if (studentSelect && studentSelect.value) {
+        params.set('student_id', studentSelect.value);
+      }
+
+      window.location.href = params.toString() ? ('?' + params.toString()) : window.location.pathname;
+    }
+
+    function reloadForSelection() {
+      const params = new URLSearchParams();
+
+      if (studentSelect && studentSelect.value) {
+        params.set('student_id', studentSelect.value);
+      }
+      if (gradeSelect && gradeSelect.value) {
+        params.set('grade_id', gradeSelect.value);
+      }
+      if (assignmentKindSelect && assignmentKindSelect.value) {
+        params.set('assignment_kind', assignmentKindSelect.value);
+      }
+      if (assignmentDateInput && assignmentDateInput.value) {
+        params.set('available_on', assignmentDateInput.value);
+      }
+
+      const query = params.toString();
+      window.location.href = query ? ('?' + query) : window.location.pathname;
+    }
 
     function visibleLessonCheckboxes() {
       return lessonCheckboxes.filter((checkbox) => {
@@ -263,16 +303,25 @@
 
     function syncLessonVisibility() {
       const selectedGradeId = gradeSelect ? gradeSelect.value : '';
+      let visibleCount = 0;
       lessonCards.forEach((card) => {
-        const shouldShow = !selectedGradeId || card.dataset.gradeId === selectedGradeId;
+        const shouldShow = !!selectedGradeId && card.dataset.gradeId === selectedGradeId;
         card.style.display = shouldShow ? '' : 'none';
         if (!shouldShow) {
           const checkbox = card.querySelector('input[type="checkbox"][name="lesson_ids"]');
           if (checkbox) {
             checkbox.checked = false;
           }
+        } else {
+          visibleCount += 1;
         }
       });
+      if (gradeEmptyState) {
+        gradeEmptyState.style.display = selectedGradeId ? 'none' : '';
+      }
+      if (lessonEmptyState) {
+        lessonEmptyState.style.display = selectedGradeId && visibleCount === 0 ? '' : 'none';
+      }
       updateSelectedCount();
     }
 
@@ -317,12 +366,12 @@
     if (studentSelect) {
       studentSelect.addEventListener('change', function () {
         syncStudentGrade();
-        syncLessonVisibility();
+        reloadForStudentSelection();
       });
     }
 
     if (gradeSelect) {
-      gradeSelect.addEventListener('change', syncLessonVisibility);
+      gradeSelect.addEventListener('change', reloadForSelection);
     }
 
     if (assignmentKindSelect) {

@@ -80,3 +80,49 @@ class LoginSerializer(serializers.Serializer):
 
         attrs['user'] = user
         return attrs
+
+
+class TeacherProfileSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120)
+    email = serializers.EmailField(max_length=180)
+    currentPassword = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    newPassword = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    confirmPassword = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        user = self.context['user']
+        current_password = attrs.get('currentPassword', '')
+        new_password = attrs.get('newPassword', '')
+        confirm_password = attrs.get('confirmPassword', '')
+
+        if AppUser.objects.exclude(id=user.id).filter(email=attrs['email']).exists():
+            raise serializers.ValidationError({'message': 'Email already registered'})
+
+        wants_password_change = bool(current_password or new_password or confirm_password)
+        if wants_password_change:
+            if not current_password:
+                raise serializers.ValidationError({'message': 'currentPassword is required to change password'})
+            if not bcrypt.checkpw(current_password.encode('utf-8'), user.password.encode('utf-8')):
+                raise serializers.ValidationError({'message': 'Current password is incorrect'})
+            if not new_password:
+                raise serializers.ValidationError({'message': 'newPassword is required'})
+            if new_password != confirm_password:
+                raise serializers.ValidationError({'message': 'newPassword and confirmPassword must match'})
+
+        attrs['wants_password_change'] = wants_password_change
+        return attrs
+
+    def update(self, instance, validated_data):
+        instance.name = validated_data['name']
+        instance.email = validated_data['email']
+
+        update_fields = ['name', 'email']
+        if validated_data.get('wants_password_change'):
+            instance.password = bcrypt.hashpw(
+                validated_data['newPassword'].encode('utf-8'),
+                bcrypt.gensalt(),
+            ).decode('utf-8')
+            update_fields.append('password')
+
+        instance.save(update_fields=update_fields)
+        return instance

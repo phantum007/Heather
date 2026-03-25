@@ -6,9 +6,15 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Assignment, Grade, Question, StudentAnswer, StudentProfile
+from .models import Assignment, Grade, LessonType, Question, StudentAnswer, StudentProfile
 from .permissions import IsAuthenticatedUser, IsStudent, IsTeacher
-from .serializers import LoginSerializer, RegisterSerializer, build_token, serialize_user
+from .serializers import (
+    LoginSerializer,
+    RegisterSerializer,
+    TeacherProfileSerializer,
+    build_token,
+    serialize_user,
+)
 
 
 def _get_answer_for_student(question, student_id):
@@ -17,11 +23,12 @@ def _get_answer_for_student(question, student_id):
 
 def _serialize_student_assignment(assignment, current_student_id):
     questions = []
-    for question in assignment.questions.all().order_by('id'):
+    for question in assignment.questions.all().order_by('order', 'id'):
         answer = _get_answer_for_student(question, current_student_id)
         questions.append(
             {
                 'id': question.id,
+                'order': question.order,
                 'questionText': question.question_text,
                 'correctAnswer': question.correct_answer,
                 'studentAnswer': answer.student_answer if answer else None,
@@ -41,11 +48,12 @@ def _serialize_student_assignment(assignment, current_student_id):
 
 def _serialize_teacher_assignment(assignment):
     questions = []
-    for question in assignment.questions.all().order_by('id'):
+    for question in assignment.questions.all().order_by('order', 'id'):
         answer = _get_answer_for_student(question, assignment.student_id)
         questions.append(
             {
                 'questionId': question.id,
+                'order': question.order,
                 'questionText': question.question_text,
                 'correctAnswer': question.correct_answer,
                 'studentAnswer': answer.student_answer if answer else None,
@@ -103,6 +111,28 @@ class LoginView(APIView):
             {
                 'token': build_token(user),
                 'user': serialize_user(user),
+            }
+        )
+
+
+class TeacherProfileView(APIView):
+    permission_classes = [IsAuthenticatedUser, IsTeacher]
+
+    def get(self, request):
+        return Response({'user': serialize_user(request.user)})
+
+    def patch(self, request):
+        serializer = TeacherProfileSerializer(data=request.data, context={'user': request.user})
+        if not serializer.is_valid():
+            if 'message' in serializer.errors:
+                return Response({'message': serializer.errors['message'][0]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        user = serializer.update(request.user, serializer.validated_data)
+        return Response(
+            {
+                'user': serialize_user(user),
+                'token': build_token(user),
             }
         )
 
@@ -177,7 +207,21 @@ class CreateAssignmentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        try:
+            lesson = LessonType.objects.select_related('grade').get(id=lesson_id)
+        except LessonType.DoesNotExist:
+            return Response({'message': 'Lesson not found'}, status=status.HTTP_404_NOT_FOUND)
+
         with transaction.atomic():
+            Assignment.objects.filter(
+                student_id=student_id,
+            ).exclude(
+                lesson__grade_id=lesson.grade_id,
+            ).delete()
+            Assignment.objects.filter(
+                student_id=student_id,
+                lesson__grade_id=lesson.grade_id,
+            ).delete()
             assignment = Assignment.objects.create(
                 teacher_id=request.user.id,
                 student_id=student_id,
@@ -190,12 +234,13 @@ class CreateAssignmentView(APIView):
                         assignment=assignment,
                         question_text=question['questionText'],
                         correct_answer=str(question['correctAnswer']),
+                        order=question.get('order', index),
                     )
-                    for question in questions
+                    for index, question in enumerate(questions, start=1)
                 ]
             )
 
-        created_questions = assignment.questions.all().order_by('id')
+        created_questions = assignment.questions.all().order_by('order', 'id')
         return Response(
             {
                 'assignment': {
@@ -209,6 +254,7 @@ class CreateAssignmentView(APIView):
                     {
                         'id': question.id,
                         'assignment_id': question.assignment_id,
+                        'order': question.order,
                         'question_text': question.question_text,
                         'correct_answer': question.correct_answer,
                     }
@@ -252,8 +298,9 @@ class CreateQuestionsOnlyView(APIView):
                     assignment_id=assignment_id,
                     question_text=question['questionText'],
                     correct_answer=str(question['correctAnswer']),
+                    order=question.get('order', index),
                 )
-                for question in questions
+                for index, question in enumerate(questions, start=1)
             ]
         )
         created_questions = Question.objects.filter(assignment_id=assignment_id).order_by('-id')[: len(questions)]
@@ -262,6 +309,7 @@ class CreateQuestionsOnlyView(APIView):
                 {
                     'id': question.id,
                     'assignment_id': question.assignment_id,
+                    'order': question.order,
                     'question_text': question.question_text,
                     'correct_answer': question.correct_answer,
                 }
@@ -299,13 +347,14 @@ class AssignmentResultsView(APIView):
 
         questions = []
         correct = 0
-        for question in assignment.questions.all().order_by('id'):
+        for question in assignment.questions.all().order_by('order', 'id'):
             answer = _get_answer_for_student(question, assignment.student_id)
             if answer and answer.is_correct:
                 correct += 1
             questions.append(
                 {
                     'questionId': question.id,
+                    'order': question.order,
                     'questionText': question.question_text,
                     'correctAnswer': question.correct_answer,
                     'studentAnswer': answer.student_answer if answer else None,

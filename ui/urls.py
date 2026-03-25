@@ -15,6 +15,7 @@ urlpatterns = [
     path('teacher/curriculum/', views.teacher_curriculum, name='ui-teacher-curriculum'),
     path('teacher/curriculum/<str:item_type>/<int:item_id>/edit/', views.teacher_edit_curriculum_item, name='ui-teacher-edit-curriculum-item'),
     path('teacher/curriculum/<str:item_type>/<int:item_id>/delete/', views.teacher_delete_curriculum_item, name='ui-teacher-delete-curriculum-item'),
+    path('teacher/profile/', views.teacher_profile, name='ui-teacher-profile'),
     path('teacher/create-assignment/', views.teacher_create_assignment, name='ui-teacher-create-assignment'),
     path('teacher/results/', views.teacher_results, name='ui-teacher-results'),
     path('student/', views.student_dashboard, name='ui-student-dashboard'),

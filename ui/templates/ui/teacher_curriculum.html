@@ -185,6 +185,10 @@
         </label>
         <input type="hidden" id="learning-unit-select" name="parent_id">
         <label class="field">
+          <span>Order</span>
+          <input class="input" type="number" name="order" min="1" placeholder="Enter question order">
+        </label>
+        <label class="field">
           <span>Question</span>
           <textarea class="input curriculum-textarea" name="learning_text" placeholder="Enter question text" required></textarea>
         </label>
@@ -274,11 +278,11 @@
 
                         {% if chapter.learnings.all %}
                           <ul class="learning-list">
-                            {% for learning in chapter.learnings.all %}
+                            {% for learning in chapter.learnings.all|dictsort:"order" %}
                               <li>
                                 <div class="tree-node-shell">
                                   <div>
-                                    <div>{{ learning.learning_text }}</div>
+                                    <div>{% if learning.order %}<strong>#{{ learning.order }}</strong> {% endif %}{{ learning.learning_text }}</div>
                                     <div class="stat-meta">Answer: {{ learning.answer_text|default:'-' }}</div>
                                   </div>
                                   <div class="tree-node-actions">
