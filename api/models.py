@@ -156,6 +156,7 @@ class CurriculumUnitAttempt(models.Model):
 
     student = models.ForeignKey(AppUser, on_delete=models.CASCADE, db_column='student_id', related_name='curriculum_unit_attempts')
     unit = models.ForeignKey(Unit, on_delete=models.CASCADE, db_column='unit_id', related_name='attempts')
+    assignment = models.ForeignKey(Assignment, null=True, blank=True, on_delete=models.CASCADE, db_column='assignment_id', related_name='curriculum_unit_attempts')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_PROGRESS)
     elapsed_seconds = models.PositiveIntegerField(default=0)
     correct_count = models.PositiveIntegerField(default=0)
@@ -167,7 +168,7 @@ class CurriculumUnitAttempt(models.Model):
     class Meta:
         db_table = 'curriculum_unit_attempts'
         managed = False
-        unique_together = ('student', 'unit')
+        unique_together = ('student', 'unit', 'assignment')
 
 
 class CurriculumQuestionAttempt(models.Model):
