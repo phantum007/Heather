@@ -223,6 +223,7 @@
       let questionStatuses = {};
       let activePracticeMode = 'default';
       let activeAudioMode = false;
+      const selectedAssignmentId = "{{ selected_assignment.id|default:'' }}";
       const unitAttemptMap = JSON.parse(document.getElementById('unit-attempt-map').textContent || '{}');
       const submitUrl = "{% url 'ui-student-unit-practice-submit' %}";
       let timerStartedAt = null;
@@ -580,6 +581,7 @@
           return;
         }
         const formData = new URLSearchParams();
+        formData.set('assignment_id', String(selectedAssignmentId));
         formData.set('unit_id', String(activeUnitId));
         formData.set('question_id', String(question.id));
         formData.set('student_answer', answerInput.value || '');

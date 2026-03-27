@@ -1,5 +1,6 @@
 import bcrypt
 import os
+import re
 from uuid import uuid4
 
 from django.conf import settings
@@ -159,6 +160,14 @@ def _delete_profile_photo(photo_path):
     absolute_path = os.path.join(settings.MEDIA_ROOT, photo_path)
     if os.path.exists(absolute_path):
         os.remove(absolute_path)
+
+
+def _lesson_sort_key(value):
+    text = str(value or '').strip()
+    match = re.fullmatch(r'(\d+)', text)
+    if match:
+        return (0, int(match.group(1)), text.lower())
+    return (1, text.lower())
 
 
 def serve_media(request, path):
@@ -683,6 +692,7 @@ def teacher_create_assignment(request):
                 'sub_lessons__units__curriculum_questions'
             ).filter(grade_id=selected_grade_id).order_by('grade_id', 'id')
         )
+        lessons.sort(key=lambda lesson: _lesson_sort_key(lesson.lesson_name))
 
     if request.method == 'POST':
         if assignment_kind != Assignment.KIND_CLASSROOM:
@@ -801,6 +811,7 @@ def teacher_create_assignment(request):
 
     selected_grade = next((grade for grade in grades if str(grade.id) == str(selected_grade_id)), None)
     selected_lessons = [item for item in lesson_options if str(item['id']) in selected_lesson_ids]
+    selected_lessons.sort(key=lambda item: _lesson_sort_key(item['name']))
 
     if latest_assignment:
         summary_lessons = list(
@@ -811,6 +822,7 @@ def teacher_create_assignment(request):
             .order_by('id')
             .distinct()
         )
+        summary_lessons.sort(key=lambda lesson: _lesson_sort_key(lesson.lesson_name))
 
     summary_grade_name = latest_assignment.lesson.grade.grade_name if latest_assignment else (selected_student.grade.grade_name if selected_student and selected_student.grade else None)
     summary_assignment_kind = latest_assignment.assignment_kind if latest_assignment else assignment_kind
@@ -945,13 +957,21 @@ def _student_available_assignments(user_id, grade_id=None, *, category='all'):
     if grade_id:
         assignments_queryset = assignments_queryset.filter(lesson__grade_id=grade_id)
 
-    return list(
+    assignments = list(
         assignments_queryset
         .select_related('lesson__grade', 'teacher')
         .prefetch_related('lesson__sub_lessons__units__curriculum_questions')
         .annotate(is_submitted=Exists(submitted_answers))
         .order_by('-assigned_date', '-id')
     )
+    assignments.sort(
+        key=lambda assignment: (
+            _lesson_sort_key(assignment.lesson.grade.grade_name if assignment.lesson and assignment.lesson.grade else ''),
+            _lesson_sort_key(assignment.lesson.lesson_name if assignment.lesson else ''),
+            assignment.id,
+        )
+    )
+    return assignments
 
 
 def _build_student_lesson_tracks(lesson):
@@ -1015,7 +1035,7 @@ def _populate_student_assignment_totals(assignments):
         assignment.total_curriculum_questions = total_questions
 
 
-def _serialize_unit_attempts(student_id, lesson_tracks):
+def _serialize_unit_attempts(student_id, assignment_id, lesson_tracks):
     unit_ids = [
         unit['id']
         for track in lesson_tracks
@@ -1026,7 +1046,7 @@ def _serialize_unit_attempts(student_id, lesson_tracks):
 
     attempts = (
         CurriculumUnitAttempt.objects
-        .filter(student_id=student_id, unit_id__in=unit_ids)
+        .filter(student_id=student_id, assignment_id=assignment_id, unit_id__in=unit_ids)
         .prefetch_related('question_attempts')
     )
 
@@ -1238,7 +1258,7 @@ def student_assignments(request):
             id=selected_assignment_id,
         )
         lesson_tracks = _build_student_lesson_tracks(selected_assignment.lesson)
-        unit_attempt_map = _serialize_unit_attempts(user.id, lesson_tracks)
+        unit_attempt_map = _serialize_unit_attempts(user.id, selected_assignment.id, lesson_tracks)
 
     return render(
         request,
@@ -1264,17 +1284,21 @@ def student_submit_unit_question(request):
 
     unit_id = request.POST.get('unit_id', '').strip()
     question_id = request.POST.get('question_id', '').strip()
+    assignment_id = request.POST.get('assignment_id', '').strip()
     student_answer = request.POST.get('student_answer', '')
     elapsed_seconds = request.POST.get('elapsed_seconds', '').strip()
 
-    if not unit_id or not question_id:
-        return JsonResponse({'message': 'unit_id and question_id are required.'}, status=400)
+    if not unit_id or not question_id or not assignment_id:
+        return JsonResponse({'message': 'assignment_id, unit_id and question_id are required.'}, status=400)
 
     if elapsed_seconds and (not elapsed_seconds.isdigit() or int(elapsed_seconds) < 0):
         return JsonResponse({'message': 'elapsed_seconds must be a non-negative number.'}, status=400)
 
+    assignment = get_object_or_404(Assignment, id=assignment_id, student_id=user.id)
     unit = get_object_or_404(Unit, id=unit_id)
     question = get_object_or_404(CurriculumQuestion, id=question_id, unit_id=unit.id)
+    if unit.sub_lesson.lesson_type_id != assignment.lesson_id:
+        return JsonResponse({'message': 'This unit does not belong to the selected assignment.'}, status=400)
     normalized_answer = (student_answer or '').strip()
     is_correct = normalized_answer.lower() == (question.answer_text or '').strip().lower()
 
@@ -1282,6 +1306,7 @@ def student_submit_unit_question(request):
         attempt, created = CurriculumUnitAttempt.objects.get_or_create(
             student_id=user.id,
             unit_id=unit.id,
+            assignment_id=assignment.id,
             defaults={
                 'status': CurriculumUnitAttempt.STATUS_IN_PROGRESS,
                 'elapsed_seconds': int(elapsed_seconds or '0'),
