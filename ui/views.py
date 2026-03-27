@@ -672,6 +672,7 @@ def teacher_create_assignment(request):
             for lesson_id in Assignment.objects.filter(
                 student_id=int(selected_student_id),
                 lesson__grade_id=int(selected_grade_id),
+                assignment_kind=assignment_kind,
             ).order_by('lesson_id').values_list('lesson_id', flat=True).distinct()
         ]
 
@@ -694,17 +695,31 @@ def teacher_create_assignment(request):
         else:
             with transaction.atomic():
                 selected_lesson_ids_int = [int(lesson_id) for lesson_id in selected_lesson_ids]
-                removed_previous_grade_count = Assignment.objects.filter(
-                    student_id=int(selected_student_id),
-                ).exclude(
-                    lesson__grade_id=int(selected_grade_id),
-                ).delete()[0]
-                replaced_count = Assignment.objects.filter(
-                    student_id=int(selected_student_id),
-                    lesson__grade_id=int(selected_grade_id),
-                ).delete()[0]
+                removed_previous_grade_count = 0
+                replaced_count = 0
+
+                if assignment_kind == Assignment.KIND_HOMEWORK:
+                    removed_previous_grade_count = Assignment.objects.filter(
+                        student_id=int(selected_student_id),
+                        assignment_kind=assignment_kind,
+                    ).exclude(
+                        lesson__grade_id=int(selected_grade_id),
+                    ).delete()[0]
+                    replaced_count = Assignment.objects.filter(
+                        student_id=int(selected_student_id),
+                        lesson__grade_id=int(selected_grade_id),
+                        assignment_kind=assignment_kind,
+                    ).delete()[0]
+
                 assignments_to_create = []
                 for lesson_id in selected_lesson_ids_int:
+                    if assignment_kind == Assignment.KIND_CLASSROOM and Assignment.objects.filter(
+                        student_id=int(selected_student_id),
+                        lesson_id=lesson_id,
+                        assignment_kind=assignment_kind,
+                        available_on=available_on or None,
+                    ).exists():
+                        continue
                     assignments_to_create.append(
                         Assignment(
                             teacher_id=user.id,

@@ -80,31 +80,30 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': os.getenv('DB_NAME', 'abacus_platform'),
-#         'USER': os.getenv('DB_USER', 'postgres'),
-#         'PASSWORD': os.getenv('DB_PASSWORD', ''),
-#         'HOST': os.getenv('DB_HOST', 'localhost'),
-#         'PORT': os.getenv('DB_PORT', '5432'),
-#     }
-# }
-
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('PGDATABASE'),
-        'USER': os.environ.get('PGUSER'),
-        'PASSWORD': os.environ.get('PGPASSWORD'),
-        'HOST': os.environ.get('PGHOST'),
-        'PORT': os.environ.get('PGPORT'),
-        'OPTIONS': {
-            'sslmode': 'require',
-        }
+        'NAME': os.getenv('DB_NAME', 'abacus_platform'),
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
+
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': os.environ.get('PGDATABASE'),
+#         'USER': os.environ.get('PGUSER'),
+#         'PASSWORD': os.environ.get('PGPASSWORD'),
+#         'HOST': os.environ.get('PGHOST'),
+#         'PORT': os.environ.get('PGPORT'),
+#         'OPTIONS': {
+#             'sslmode': 'require',
+#         },
+#     }
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = os.getenv('TIME_ZONE', 'Europe/London')
