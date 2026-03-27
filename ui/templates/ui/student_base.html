@@ -1,19 +1,28 @@
 {% extends 'ui/base.html' %}
 
 {% block body %}
-<div class="teacher-shell">
+<div class="teacher-shell app-shell" id="student-shell">
   <aside class="teacher-sidebar">
-    <div class="brand">
-      <div class="brand-mark">
-        {% include 'ui/partials/brand_logo.svg' %}
+    <div class="sidebar-topbar">
+      <div class="brand">
+        <div class="brand-mark">
+          {% include 'ui/partials/brand_logo.svg' %}
+        </div>
+        <div>
+          <h1>Abacus Mental</h1>
+        </div>
       </div>
-      <div>
-        <h1>Abacus Mental</h1>
-      </div>
+      <button type="button" class="sidebar-toggle" id="student-sidebar-toggle" aria-label="Toggle sidebar">≡</button>
     </div>
 
     <div class="profile-card">
-      <div class="avatar">{{ current_user.name|first|default:'S' }}</div>
+      <div class="avatar">
+        {% if student_profile and student_profile.profile_photo %}
+          <img src="{% url 'ui-serve-media' path=student_profile.profile_photo %}" alt="{{ current_user.name }}" class="avatar-image">
+        {% else %}
+          {{ current_user.name|first|default:'S' }}
+        {% endif %}
+      </div>
       <div>
         <p class="profile-name">{{ current_user.name }}</p>
         <p class="profile-email">{{ current_user.email }}</p>
@@ -21,11 +30,15 @@
     </div>
 
     <nav class="nav-list">
-      <a href="{% url 'ui-student-dashboard' %}" class="{% if request.path == '/student/' %}active{% endif %}">Dashboard</a>
-      <a href="{% url 'ui-student-assignments' %}" class="{% if '/student/assignments/' in request.path %}active{% endif %}">Assignments</a>
+      <a href="{% url 'ui-student-assignments' %}?category=all" data-short="A" class="{% if '/student/assignments/' in request.path and request.GET.category|default:'all' == 'all' %}active{% endif %}"><span class="nav-label">Assignment</span></a>
+      <a href="{% url 'ui-student-assignments' %}?category=homework" data-short="H" class="{% if '/student/assignments/' in request.path and request.GET.category == 'homework' %}active{% endif %}"><span class="nav-label">My Homework</span></a>
+      <a href="{% url 'ui-student-assignments' %}?category=classroom" data-short="C" class="{% if '/student/assignments/' in request.path and request.GET.category == 'classroom' %}active{% endif %}"><span class="nav-label">My Classroom</span></a>
+      <a href="{% url 'ui-student-profile' %}" data-short="P" class="{% if request.path == '/student/profile/' %}active{% endif %}"><span class="nav-label">Profile</span></a>
     </nav>
 
-    <a href="{% url 'ui-logout' %}" class="button ghost full">Sign Out</a>
+    <div class="sidebar-footer">
+      <a href="{% url 'ui-logout' %}" data-short="S" class="button ghost full"><span class="button-label">Sign Out</span></a>
+    </div>
   </aside>
 
   <main class="teacher-main">
@@ -37,13 +50,27 @@
       <div class="status-pill">Live Student UI</div>
     </header>
 
-    {% if messages %}
-      {% for message in messages %}
-        <div class="alert {% if 'success' in message.tags %}alert-success{% else %}alert-error{% endif %}">{{ message }}</div>
-      {% endfor %}
-    {% endif %}
+    <div class="main-scroll">
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert {% if 'success' in message.tags %}alert-success{% else %}alert-error{% endif %}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
 
-    {% block content %}{% endblock %}
+      {% block content %}{% endblock %}
+    </div>
   </main>
 </div>
+<script>
+  (function () {
+    const shell = document.getElementById('student-shell');
+    const toggle = document.getElementById('student-sidebar-toggle');
+    if (!shell || !toggle) {
+      return;
+    }
+    toggle.addEventListener('click', function () {
+      shell.classList.toggle('sidebar-collapsed');
+    });
+  })();
+</script>
 {% endblock %}

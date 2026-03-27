@@ -1,16 +1,19 @@
 {% extends 'ui/base.html' %}
 
 {% block body %}
-<div class="teacher-shell">
+<div class="teacher-shell app-shell" id="teacher-shell">
   <aside class="teacher-sidebar">
-    <div class="brand">
-      <div class="brand-mark">
-        {% include 'ui/partials/brand_logo.svg' %}
+    <div class="sidebar-topbar">
+      <div class="brand">
+        <div class="brand-mark">
+          {% include 'ui/partials/brand_logo.svg' %}
+        </div>
+        <div>
+          <p class="brand-eyebrow">Teacher</p>
+          <h1>Abacus Mental</h1>
+        </div>
       </div>
-      <div>
-        <p class="brand-eyebrow">Teacher</p>
-        <h1>Abacus Mental</h1>
-      </div>
+      <button type="button" class="sidebar-toggle" id="teacher-sidebar-toggle" aria-label="Toggle sidebar">≡</button>
     </div>
 
     <div class="profile-card">
@@ -22,15 +25,17 @@
     </div>
 
     <nav class="nav-list">
-      <a href="{% url 'ui-teacher-dashboard' %}" class="{% if request.path == '/teacher/' %}active{% endif %}">Dashboard</a>
-      <a href="{% url 'ui-teacher-students' %}" class="{% if '/teacher/students/' in request.path %}active{% endif %}">Students</a>
-      <a href="{% url 'ui-teacher-curriculum' %}" class="{% if '/teacher/curriculum/' in request.path %}active{% endif %}">Curriculum</a>
-      <a href="{% url 'ui-teacher-create-assignment' %}" class="{% if '/teacher/create-assignment/' in request.path %}active{% endif %}">Assignments</a>
-      <a href="{% url 'ui-teacher-results' %}" class="{% if '/teacher/results/' in request.path %}active{% endif %}">Leaderboard</a>
-      <a href="{% url 'ui-teacher-profile' %}" class="{% if '/teacher/profile/' in request.path %}active{% endif %}">Profile</a>
+      <a href="{% url 'ui-teacher-dashboard' %}" data-short="D" class="{% if request.path == '/teacher/' %}active{% endif %}"><span class="nav-label">Dashboard</span></a>
+      <a href="{% url 'ui-teacher-students' %}" data-short="S" class="{% if '/teacher/students/' in request.path %}active{% endif %}"><span class="nav-label">Students</span></a>
+      <a href="{% url 'ui-teacher-curriculum' %}" data-short="C" class="{% if '/teacher/curriculum/' in request.path %}active{% endif %}"><span class="nav-label">Curriculum</span></a>
+      <a href="{% url 'ui-teacher-create-assignment' %}" data-short="A" class="{% if '/teacher/create-assignment/' in request.path %}active{% endif %}"><span class="nav-label">Assignments</span></a>
+      <a href="{% url 'ui-teacher-results' %}" data-short="L" class="{% if '/teacher/results/' in request.path %}active{% endif %}"><span class="nav-label">Leaderboard</span></a>
+      <a href="{% url 'ui-teacher-profile' %}" data-short="P" class="{% if '/teacher/profile/' in request.path %}active{% endif %}"><span class="nav-label">Profile</span></a>
     </nav>
 
-    <a href="{% url 'ui-logout' %}" class="button ghost full">Sign Out</a>
+    <div class="sidebar-footer">
+      <a href="{% url 'ui-logout' %}" data-short="O" class="button ghost full"><span class="button-label">Sign Out</span></a>
+    </div>
   </aside>
 
   <main class="teacher-main">
@@ -42,24 +47,38 @@
       <div class="status-pill">{% now "d M Y" %}</div>
     </header>
 
-    <section class="hero">
-      <div>
-        <p class="eyebrow muted">Teacher workspace</p>
-        <p class="hero-copy">Plan lessons, assign practice, and review student performance from one place.</p>
-      </div>
-      <div class="hero-actions">
-        <a href="{% url 'ui-teacher-create-assignment' %}" class="button primary">Create Assignment</a>
-        <a href="{% url 'ui-teacher-results' %}" class="button secondary">Open Leaderboard</a>
-      </div>
-    </section>
+    <div class="main-scroll">
+      <section class="hero">
+        <div>
+          <p class="eyebrow muted">Teacher workspace</p>
+          <p class="hero-copy">Plan lessons, assign practice, and review student performance from one place.</p>
+        </div>
+        <div class="hero-actions">
+          <a href="{% url 'ui-teacher-create-assignment' %}" class="button primary">Create Assignment</a>
+          <a href="{% url 'ui-teacher-results' %}" class="button secondary">Open Leaderboard</a>
+        </div>
+      </section>
 
-    {% if messages %}
-      {% for message in messages %}
-        <div class="alert {% if 'success' in message.tags %}alert-success{% else %}alert-error{% endif %}">{{ message }}</div>
-      {% endfor %}
-    {% endif %}
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert {% if 'success' in message.tags %}alert-success{% else %}alert-error{% endif %}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
 
-    {% block content %}{% endblock %}
+      {% block content %}{% endblock %}
+    </div>
   </main>
 </div>
+<script>
+  (function () {
+    const shell = document.getElementById('teacher-shell');
+    const toggle = document.getElementById('teacher-sidebar-toggle');
+    if (!shell || !toggle) {
+      return;
+    }
+    toggle.addEventListener('click', function () {
+      shell.classList.toggle('sidebar-collapsed');
+    });
+  })();
+</script>
 {% endblock %}

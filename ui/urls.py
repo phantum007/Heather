@@ -19,5 +19,7 @@ urlpatterns = [
     path('teacher/create-assignment/', views.teacher_create_assignment, name='ui-teacher-create-assignment'),
     path('teacher/results/', views.teacher_results, name='ui-teacher-results'),
     path('student/', views.student_dashboard, name='ui-student-dashboard'),
+    path('student/profile/', views.student_profile, name='ui-student-profile'),
     path('student/assignments/', views.student_assignments, name='ui-student-assignments'),
+    path('student/unit-practice/submit/', views.student_submit_unit_question, name='ui-student-unit-practice-submit'),
 ]

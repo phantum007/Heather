@@ -1,63 +1,649 @@
 {% extends 'ui/student_base.html' %}
 
-{% block eyebrow %}Student assignments{% endblock %}
+{% block eyebrow %}Student lessons{% endblock %}
 {% block page_title %}Assignments{% endblock %}
 
 {% block content %}
-<section class="grid grid-2">
-  <article class="card">
-    <div class="toolbar">
-      <div>
-        <h3>Your Assignments</h3>
-        <p class="card-subtitle">Open any assignment to view details and submission status.</p>
+<section class="grid grid-3 compact-grid">
+  <a href="{% url 'ui-student-assignments' %}?category=all" class="card action-card {% if assignment_category == 'all' %}action-card-active{% endif %}">
+    <p class="stat-label">Assignment</p>
+    <p class="action-title">All Lessons</p>
+    <p class="stat-meta">Browse every lesson assigned to you.</p>
+  </a>
+  <a href="{% url 'ui-student-assignments' %}?category=homework" class="card action-card {% if assignment_category == 'homework' %}action-card-active{% endif %}">
+    <p class="stat-label">My Homework</p>
+    <p class="action-title">Homework Lessons</p>
+    <p class="stat-meta">See only homework lessons.</p>
+  </a>
+  <a href="{% url 'ui-student-assignments' %}?category=classroom" class="card action-card {% if assignment_category == 'classroom' %}action-card-active{% endif %}">
+    <p class="stat-label">My Classroom</p>
+    <p class="action-title">Today's Classroom</p>
+    <p class="stat-meta">See classroom lessons available today.</p>
+  </a>
+</section>
+
+{% if selected_assignment %}
+  <section class="grid">
+    <article class="card">
+      <div class="toolbar">
+        <div>
+          <h3>Lesson Detail</h3>
+        </div>
+        <a href="{% url 'ui-student-assignments' %}?category={{ assignment_category }}" class="button ghost">Back to Lessons</a>
       </div>
-      <span class="badge">{{ assignments|length }} assigned</span>
-    </div>
 
-    <div class="stack">
-      {% for assignment in assignments %}
-        <a href="{% url 'ui-student-assignments' %}?assignment_id={{ assignment.id }}" class="list-card">
-          <div>
-            <p class="list-title">{{ assignment.lesson.lesson_name }}</p>
-            <p class="stat-meta">{{ assignment.lesson.grade.grade_name }} • {{ assignment.get_assignment_kind_display }} • Teacher: {{ assignment.teacher.name }}{% if assignment.available_on %} • {{ assignment.available_on|date:"d M Y" }}{% endif %}</p>
-          </div>
-          <span class="badge">{% if assignment.is_submitted %}Submitted{% else %}Pending{% endif %}</span>
-        </a>
-      {% empty %}
-        <div class="empty-state">No assignments are available yet.</div>
-      {% endfor %}
-    </div>
-  </article>
-
-  <article class="card">
-    <div class="toolbar">
-      <div>
-        <h3>Assignment Detail</h3>
-        <p class="card-subtitle">Review questions and answers for the selected assignment.</p>
-      </div>
-    </div>
-
-    {% if assignment_detail %}
       <div class="result-summary">
-        <p class="stat-label">{{ assignment_detail.assignment.get_assignment_kind_display }}</p>
-        <p class="stat-value">{{ assignment_detail.correct }}/{{ assignment_detail.total }}</p>
-        <p class="stat-meta">{{ assignment_detail.percentage }}% correct{% if assignment_detail.assignment.available_on %} • Available {{ assignment_detail.assignment.available_on|date:"d M Y" }}{% endif %}</p>
+        <p class="stat-label">{{ selected_assignment.get_assignment_kind_display }}</p>
+        <p class="student-lesson-title">Grade {{ selected_assignment.lesson.grade.grade_name }} | Lesson {{ selected_assignment.lesson.lesson_name }}</p>
+        <p class="stat-meta">Teacher: {{ selected_assignment.teacher.name }}{% if selected_assignment.available_on %} • Available {{ selected_assignment.available_on|date:"d M Y" }}{% endif %}</p>
       </div>
 
-      <div class="stack">
-        {% for question in assignment_detail.questions %}
-          <div class="question-card {% if question.is_correct %}question-card-success{% else %}question-card-error{% endif %}">
-            <p class="list-title">{{ question.question_text }}</p>
-            <p class="stat-meta">Your answer: {{ question.student_answer|default:'Not submitted' }}</p>
-            <p class="stat-meta">Correct answer: {{ question.correct_answer }}</p>
-          </div>
+      <div class="lesson-structure-grid">
+        {% for track in lesson_tracks %}
+          <article class="sublesson-focus-card">
+            <div class="sublesson-focus-header">
+              <div>
+                <p class="sublesson-focus-title">{{ track.name }}</p>
+              </div>
+              <span class="badge">{{ track.units|length }} unit{{ track.units|length|pluralize }}</span>
+            </div>
+
+            <div class="practice-unit-grid">
+              {% for unit in track.units %}
+                <div class="practice-unit-card">
+                  <button
+                    type="button"
+                    class="practice-unit-trigger"
+                    data-unit-id="{{ unit.id }}"
+                    data-unit-name="{{ unit.unit_name|escape }}"
+                  >
+                    <div class="practice-unit-order">{{ forloop.counter }}</div>
+                    <div>
+                      <p class="practice-unit-name">Unit {{ unit.unit_name }}</p>
+                      <p class="practice-unit-meta">{{ unit.questions|length }} question{{ unit.questions|length|pluralize }}</p>
+                    </div>
+                  </button>
+                  <div class="practice-unit-action">
+                    <button
+                      type="button"
+                      class="button primary practice-start-button"
+                      data-unit-id="{{ unit.id }}"
+                      data-unit-name="{{ unit.unit_name|escape }}"
+                      data-practice-mode="{{ unit.practice_mode }}"
+                      data-audio-mode="{% if unit.is_audio_mode %}true{% else %}false{% endif %}"
+                      data-unit-path="Grade {{ selected_assignment.lesson.grade.grade_name|escape }} | Lesson {{ selected_assignment.lesson.lesson_name|escape }} | {{ track.name|escape }} | Unit {{ unit.unit_name|escape }}"
+                    >
+                      Start
+                    </button>
+                  </div>
+                </div>
+              {% empty %}
+                <div class="tree-empty">No units added for this sub-lesson type yet.</div>
+              {% endfor %}
+            </div>
+          </article>
         {% empty %}
-          <div class="empty-state">This assignment does not have questions yet.</div>
+          <div class="empty-state">No sub-lesson types are linked to this lesson yet.</div>
         {% endfor %}
       </div>
-    {% else %}
-      <div class="empty-state">Select an assignment from the left to view its details.</div>
-    {% endif %}
-  </article>
-</section>
+
+    </article>
+  </section>
+  <div class="practice-modal" id="practice-modal" aria-hidden="true">
+    <div class="practice-modal-shell">
+      <div class="practice-modal-head">
+        <div>
+          <p class="sublesson-focus-title" id="practice-modal-title">Unit</p>
+        </div>
+        <div class="practice-head-meta">
+          <span class="practice-timer" id="practice-timer">00:00</span>
+          <button type="button" class="practice-close" id="practice-close" aria-label="Close practice">&times;</button>
+        </div>
+      </div>
+
+      <div class="practice-modal-body">
+        <div class="practice-question-nav" id="practice-question-nav"></div>
+
+        <div class="practice-stage">
+          <div class="practice-stage-question" id="practice-stage-question">Select a question</div>
+
+          <div class="practice-answer-box">
+            <div class="practice-answer-icon">+</div>
+            <input type="text" class="practice-answer-input" id="practice-answer-input" placeholder="Type here...">
+          </div>
+
+          <div class="practice-stage-actions">
+            <span class="practice-feedback" id="practice-feedback"></span>
+            <button type="button" class="button primary" id="practice-check-answer">Check Answer</button>
+          </div>
+        </div>
+
+        <div class="practice-summary" id="practice-summary">
+          <div>
+            <h3 class="practice-summary-title" id="practice-summary-title">You passed!</h3>
+            <p class="practice-summary-copy" id="practice-summary-copy">Great work.</p>
+            <div class="practice-summary-stats">
+              <div id="practice-summary-score">Your score: 0/0</div>
+              <div id="practice-summary-wrong">Wrong answers: 0</div>
+              <div id="practice-summary-time">Your time: 00:00</div>
+            </div>
+            <div class="practice-summary-actions">
+              <button type="button" class="button ghost" id="practice-to-list">To list</button>
+              <button type="button" class="button primary" id="practice-next-unit">Next unit</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% for track in lesson_tracks %}
+    {% for unit in track.units %}
+      <script type="application/json" id="unit-questions-{{ unit.id }}">
+        [
+          {% for question in unit.questions %}
+            {
+              "id": {{ question.id }},
+              "question_text": "{{ question.question_text|escapejs }}",
+              "answer_text": "{{ question.answer_text|escapejs }}"
+            }{% if not forloop.last %},{% endif %}
+          {% endfor %}
+        ]
+      </script>
+    {% endfor %}
+  {% endfor %}
+  {{ unit_attempt_map|json_script:"unit-attempt-map" }}
+{% else %}
+  <section class="grid">
+    <article class="card">
+      <div class="toolbar">
+        <div>
+          <h3>Your Lessons</h3>
+        </div>
+        <span class="badge">{{ assignments|length }} lesson{{ assignments|length|pluralize }}</span>
+      </div>
+
+      <div class="lesson-card-grid">
+        {% for assignment in assignments %}
+          <a href="{% url 'ui-student-assignments' %}?category={{ assignment_category }}&assignment_id={{ assignment.id }}" class="lesson-select-card">
+            <div class="lesson-card-top">
+              <div>
+                <p class="list-title">Grade {{ assignment.lesson.grade.grade_name }} | Lesson {{ assignment.lesson.lesson_name }}</p>
+              </div>
+              <span class="badge">{% if assignment.is_submitted %}Submitted{% else %}Pending{% endif %}</span>
+            </div>
+
+            <p class="lesson-card-subtitle">Teacher: {{ assignment.teacher.name }}</p>
+
+            <div class="lesson-card-meta">
+              <span class="lesson-meta-pill">{{ assignment.total_units }} total unit{{ assignment.total_units|pluralize }}</span>
+              <span class="lesson-meta-pill">{{ assignment.total_curriculum_questions }} total question{{ assignment.total_curriculum_questions|pluralize }}</span>
+              {% if assignment.available_on %}
+                <span class="lesson-meta-pill">{{ assignment.available_on|date:"d M Y" }}</span>
+              {% endif %}
+            </div>
+          </a>
+        {% empty %}
+          <div class="empty-state">No lessons are available in this section yet.</div>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+{% endif %}
+{% if selected_assignment %}
+  <script>
+    (function () {
+      const modal = document.getElementById('practice-modal');
+      const closeButton = document.getElementById('practice-close');
+      const unitButtons = document.querySelectorAll('.practice-unit-trigger');
+      const startButtons = document.querySelectorAll('.practice-start-button');
+      const title = document.getElementById('practice-modal-title');
+      const nav = document.getElementById('practice-question-nav');
+      const stageQuestion = document.getElementById('practice-stage-question');
+      const answerInput = document.getElementById('practice-answer-input');
+      const feedback = document.getElementById('practice-feedback');
+      const checkButton = document.getElementById('practice-check-answer');
+      const timer = document.getElementById('practice-timer');
+      const summary = document.getElementById('practice-summary');
+      const summaryTitle = document.getElementById('practice-summary-title');
+      const summaryCopy = document.getElementById('practice-summary-copy');
+      const summaryScore = document.getElementById('practice-summary-score');
+      const summaryWrong = document.getElementById('practice-summary-wrong');
+      const summaryTime = document.getElementById('practice-summary-time');
+      const toListButton = document.getElementById('practice-to-list');
+      const nextUnitButton = document.getElementById('practice-next-unit');
+
+      if (!modal || !title || !nav || !stageQuestion || !answerInput || !feedback || !checkButton || !timer || !summary || !summaryTitle || !summaryCopy || !summaryScore || !summaryWrong || !summaryTime || !toListButton || !nextUnitButton) {
+        return;
+      }
+
+      let activeQuestions = [];
+      let activeQuestionIndex = 0;
+      let activeUnitId = null;
+      let questionStatuses = {};
+      let activePracticeMode = 'default';
+      let activeAudioMode = false;
+      const unitAttemptMap = JSON.parse(document.getElementById('unit-attempt-map').textContent || '{}');
+      const submitUrl = "{% url 'ui-student-unit-practice-submit' %}";
+      let timerStartedAt = null;
+      let timerElapsedSeconds = 0;
+      let timerIntervalId = null;
+      let flashTimeoutId = null;
+      let flashSequenceToken = 0;
+
+      function getCookie(name) {
+        const cookieValue = document.cookie
+          .split('; ')
+          .find((row) => row.startsWith(`${name}=`));
+        return cookieValue ? decodeURIComponent(cookieValue.split('=')[1]) : '';
+      }
+
+      function formatTime(totalSeconds) {
+        const safeSeconds = Math.max(0, totalSeconds || 0);
+        const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, '0');
+        const seconds = String(safeSeconds % 60).padStart(2, '0');
+        return `${minutes}:${seconds}`;
+      }
+
+      function loadUnitAttempts(unitId) {
+        const entry = unitAttemptMap[String(unitId)] || unitAttemptMap[unitId] || {};
+        const statuses = {};
+        Object.entries(entry.question_statuses || {}).forEach(([questionId, state]) => {
+          statuses[String(questionId)] = state.status;
+        });
+        return {
+          statuses,
+          elapsedSeconds: entry.elapsed_seconds || 0,
+          completed: ['passed', 'failed'].includes(entry.status),
+          status: entry.status || 'in_progress',
+          correctCount: entry.correct_count || 0,
+          wrongCount: entry.wrong_count || 0,
+        };
+      }
+
+      function startTimer(initialSeconds) {
+        timerElapsedSeconds = initialSeconds || 0;
+        timerStartedAt = Date.now() - (timerElapsedSeconds * 1000);
+        timer.textContent = formatTime(timerElapsedSeconds);
+        if (timerIntervalId) {
+          window.clearInterval(timerIntervalId);
+        }
+        timerIntervalId = window.setInterval(function () {
+          timerElapsedSeconds = Math.floor((Date.now() - timerStartedAt) / 1000);
+          timer.textContent = formatTime(timerElapsedSeconds);
+        }, 1000);
+      }
+
+      function stopTimer() {
+        if (timerIntervalId) {
+          window.clearInterval(timerIntervalId);
+          timerIntervalId = null;
+        }
+      }
+
+      function stopSpeech() {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+        }
+      }
+
+      function clearFlashSequence() {
+        flashSequenceToken += 1;
+        if (flashTimeoutId) {
+          window.clearTimeout(flashTimeoutId);
+          flashTimeoutId = null;
+        }
+      }
+
+      function speakQuestion(questionText) {
+        if (!activeAudioMode || !('speechSynthesis' in window) || !questionText) {
+          return;
+        }
+        stopSpeech();
+        const spokenText = String(questionText)
+          .split(/\n+/)
+          .map((part) => part.trim())
+          .filter(Boolean)
+          .join(' ... ')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+        const utterance = new SpeechSynthesisUtterance(
+          spokenText
+        );
+        utterance.rate = 0.55;
+        utterance.pitch = 1;
+        window.speechSynthesis.speak(utterance);
+      }
+
+      function showPracticeStage() {
+        document.querySelector('.practice-stage').style.display = 'grid';
+        summary.classList.remove('is-visible');
+      }
+
+      function showSummaryScreen(summaryState) {
+        const wrongCount = summaryState.wrongCount;
+        const correctCount = summaryState.correctCount;
+        const passed = summaryState.passed;
+        document.querySelector('.practice-stage').style.display = 'none';
+        summary.classList.add('is-visible');
+        summaryTitle.textContent = passed ? "You passed!" : "You'll succeed next time!";
+        summaryCopy.textContent = passed ? 'Nice work.' : 'Try again';
+        summaryScore.textContent = `Your score: ${correctCount}/${activeQuestions.length}`;
+        summaryWrong.textContent = `Wrong answers: ${wrongCount}`;
+        summaryTime.textContent = `Your time: ${formatTime(timerElapsedSeconds)}`;
+
+        const currentButton = Array.from(startButtons).find((button) => button.dataset.unitId === String(activeUnitId));
+        const remainingButton = Array.from(startButtons).find((button) => {
+          const card = button.closest('.practice-unit-card');
+          return card && !card.classList.contains('practice-unit-card-complete') && button.dataset.unitId !== String(activeUnitId);
+        });
+        nextUnitButton.disabled = !remainingButton;
+        nextUnitButton.textContent = remainingButton ? 'Next unit' : 'No more units';
+        nextUnitButton.onclick = function () {
+          if (!remainingButton) {
+            return;
+          }
+          const card = remainingButton.closest('.practice-unit-card');
+          if (card) {
+            selectUnit(remainingButton.dataset.unitId);
+          }
+          openUnit(
+            remainingButton.dataset.unitId,
+            remainingButton.dataset.unitPath,
+            remainingButton.dataset.practiceMode,
+            remainingButton.dataset.audioMode === 'true'
+          );
+        };
+        toListButton.onclick = function () {
+          stopTimer();
+          stopSpeech();
+          clearFlashSequence();
+          modal.classList.remove('is-open');
+          modal.setAttribute('aria-hidden', 'true');
+        };
+      }
+
+      function selectUnit(unitId) {
+        activeUnitId = unitId;
+        document.querySelectorAll('.practice-unit-card').forEach((card) => {
+          const trigger = card.querySelector('.practice-unit-trigger');
+          card.classList.toggle('practice-unit-card-active', trigger && trigger.dataset.unitId === unitId);
+        });
+      }
+
+      function updateUnitCompletionStates() {
+        document.querySelectorAll('.practice-unit-card').forEach((card) => {
+          const trigger = card.querySelector('.practice-unit-trigger');
+          if (!trigger) {
+            return;
+          }
+          const payloadElement = document.getElementById(`unit-questions-${trigger.dataset.unitId}`);
+          const questions = payloadElement ? JSON.parse(payloadElement.textContent) : [];
+          const savedState = loadUnitAttempts(trigger.dataset.unitId);
+          const savedStatuses = savedState.statuses || {};
+          const isComplete = ['passed', 'failed'].includes(savedState.status) || (questions.length > 0 && questions.every((question) => Boolean(savedStatuses[String(question.id)])));
+          card.classList.toggle('practice-unit-card-complete', isComplete);
+        });
+      }
+
+      function renderQuestionNav() {
+        nav.innerHTML = '';
+
+        activeQuestions.forEach((question, index) => {
+          const button = document.createElement('button');
+          const status = questionStatuses[String(question.id)] || 'unattempted';
+          button.type = 'button';
+          button.innerHTML = `Question ${index + 1}<span class="practice-question-status">${status === 'correct' ? 'Correct' : status === 'incorrect' ? 'Incorrect' : 'Not Tried'}</span>`;
+          button.classList.toggle('is-correct', status === 'correct');
+          button.classList.toggle('is-incorrect', status === 'incorrect');
+          button.classList.toggle('is-locked', status !== 'unattempted');
+          button.addEventListener('click', function () {
+            if (questionStatuses[String(question.id)] && index !== activeQuestionIndex) {
+              return;
+            }
+            activeQuestionIndex = index;
+            renderQuestion();
+          });
+          nav.appendChild(button);
+        });
+      }
+
+      function renderQuestion() {
+        const question = activeQuestions[activeQuestionIndex];
+        const hasRemainingQuestions = activeQuestions.some((item) => !questionStatuses[String(item.id)]);
+        clearFlashSequence();
+        stageQuestion.classList.remove('practice-stage-question-listening', 'practice-stage-question-flash');
+        if (!question) {
+          stageQuestion.textContent = 'No questions found';
+          answerInput.value = '';
+          answerInput.disabled = true;
+          checkButton.disabled = true;
+          feedback.textContent = '';
+          feedback.className = 'practice-feedback';
+          return;
+        }
+
+        if (activePracticeMode === 'listening') {
+          stageQuestion.innerHTML = `
+            <div class="practice-listening-shell">
+              <svg class="practice-listening-icon" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <circle cx="64" cy="66" r="34" fill="#DCFCE7" stroke="#86EFAC" stroke-width="8"/>
+                <path d="M32 62V56C32 38.327 46.327 24 64 24C81.673 24 96 38.327 96 56V62" stroke="#22C55E" stroke-width="8" stroke-linecap="round"/>
+                <rect x="20" y="52" width="16" height="34" rx="8" fill="#22C55E"/>
+                <rect x="92" y="52" width="16" height="34" rx="8" fill="#22C55E"/>
+                <path d="M100 86C100 100.359 88.359 112 74 112H64" stroke="#16A34A" stroke-width="6" stroke-linecap="round"/>
+                <circle cx="52" cy="68" r="5" fill="#86EFAC"/>
+                <circle cx="76" cy="68" r="5" fill="#86EFAC"/>
+              </svg>
+              <p class="practice-listening-copy">Listen and Answer</p>
+            </div>
+          `;
+          stageQuestion.classList.add('practice-stage-question-listening');
+        } else if (activePracticeMode === 'flash') {
+          const flashParts = String(question.question_text)
+            .split(/\n+/)
+            .map((part) => part.trim())
+            .filter(Boolean);
+          stageQuestion.innerHTML = `
+            <div class="practice-listening-shell">
+              <div id="practice-flash-text"></div>
+              <p class="practice-flash-copy">Watch and Answer</p>
+            </div>
+          `;
+          stageQuestion.classList.add('practice-stage-question-flash');
+          const flashTarget = document.getElementById('practice-flash-text');
+          const currentToken = ++flashSequenceToken;
+          const sequence = flashParts.length ? flashParts : [String(question.question_text).trim()];
+          let flashIndex = 0;
+          const runFlashStep = function () {
+            if (currentToken !== flashSequenceToken || !flashTarget) {
+              return;
+            }
+            flashTarget.textContent = sequence[flashIndex] || '';
+            flashIndex += 1;
+            if (flashIndex < sequence.length) {
+              flashTimeoutId = window.setTimeout(runFlashStep, 3000);
+            } else {
+              flashTimeoutId = window.setTimeout(function () {
+                if (currentToken === flashSequenceToken && flashTarget) {
+                  flashTarget.textContent = '';
+                }
+              }, 3000);
+            }
+          };
+          runFlashStep();
+        } else {
+          stageQuestion.textContent = question.question_text;
+        }
+        speakQuestion(question.question_text);
+        const isLocked = Boolean(questionStatuses[String(question.id)]);
+        answerInput.disabled = isLocked;
+        checkButton.disabled = isLocked || !hasRemainingQuestions;
+        answerInput.value = '';
+        if (isLocked) {
+          feedback.textContent = questionStatuses[String(question.id)] === 'correct' ? 'Already answered correctly' : 'Already answered incorrectly';
+          feedback.className = `practice-feedback ${questionStatuses[String(question.id)] === 'correct' ? 'correct' : 'incorrect'}`;
+        } else {
+          feedback.textContent = '';
+          feedback.className = 'practice-feedback';
+        }
+
+        nav.querySelectorAll('button').forEach((button, index) => {
+          button.classList.toggle('is-active', index === activeQuestionIndex);
+        });
+      }
+
+      function openUnit(unitId, unitPath, practiceMode, audioMode) {
+        const payloadId = unitId;
+        const payloadElement = document.getElementById(`unit-questions-${payloadId}`);
+        activeQuestions = payloadElement ? JSON.parse(payloadElement.textContent) : [];
+        const savedState = loadUnitAttempts(unitId);
+        questionStatuses = savedState.statuses || {};
+        activePracticeMode = practiceMode || 'default';
+        activeAudioMode = Boolean(audioMode);
+        const nextUnattemptedIndex = activeQuestions.findIndex((item) => !questionStatuses[String(item.id)]);
+        activeQuestionIndex = nextUnattemptedIndex >= 0 ? nextUnattemptedIndex : 0;
+        title.textContent = unitPath || 'Unit';
+        showPracticeStage();
+        startTimer(savedState.elapsedSeconds || 0);
+        renderQuestionNav();
+
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        if (savedState.completed && activeQuestions.length > 0) {
+          stopTimer();
+          showSummaryScreen({
+            wrongCount: savedState.wrongCount,
+            correctCount: savedState.correctCount,
+            passed: savedState.status === 'passed',
+          });
+        } else {
+          renderQuestion();
+        }
+      }
+
+      unitButtons.forEach((button) => {
+        button.addEventListener('click', function () {
+          const card = button.closest('.practice-unit-card');
+          if (card && card.classList.contains('practice-unit-card-complete')) {
+            return;
+          }
+          selectUnit(button.dataset.unitId);
+        });
+      });
+
+      startButtons.forEach((button) => {
+        button.addEventListener('click', function (event) {
+          event.stopPropagation();
+          const card = button.closest('.practice-unit-card');
+          if (card && card.classList.contains('practice-unit-card-complete')) {
+            return;
+          }
+          selectUnit(button.dataset.unitId);
+          openUnit(
+            button.dataset.unitId,
+            button.dataset.unitPath,
+            button.dataset.practiceMode,
+            button.dataset.audioMode === 'true'
+          );
+        });
+      });
+
+      closeButton.addEventListener('click', function () {
+        stopTimer();
+        stopSpeech();
+        clearFlashSequence();
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+      });
+
+      modal.addEventListener('click', function (event) {
+        if (event.target === modal) {
+          stopTimer();
+          stopSpeech();
+          clearFlashSequence();
+          modal.classList.remove('is-open');
+          modal.setAttribute('aria-hidden', 'true');
+        }
+      });
+
+      answerInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' && !checkButton.disabled) {
+          event.preventDefault();
+          checkButton.click();
+        }
+      });
+
+      checkButton.addEventListener('click', function () {
+        const question = activeQuestions[activeQuestionIndex];
+        if (!question) {
+          return;
+        }
+        const formData = new URLSearchParams();
+        formData.set('unit_id', String(activeUnitId));
+        formData.set('question_id', String(question.id));
+        formData.set('student_answer', answerInput.value || '');
+        formData.set('elapsed_seconds', String(timerElapsedSeconds));
+
+        fetch(submitUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+            'X-CSRFToken': getCookie('csrftoken'),
+          },
+          body: formData.toString(),
+        })
+          .then((response) => response.json().then((data) => ({ok: response.ok, data})))
+          .then(({ok, data}) => {
+            if (!ok) {
+              feedback.textContent = data.message || 'Unable to save answer.';
+              feedback.className = 'practice-feedback incorrect';
+              return;
+            }
+
+            feedback.textContent = data.is_correct ? 'Correct answer' : 'Incorrect answer';
+            feedback.className = `practice-feedback ${data.is_correct ? 'correct' : 'incorrect'}`;
+            questionStatuses[String(question.id)] = data.status;
+            unitAttemptMap[String(activeUnitId)] = {
+              status: data.attempt_status,
+              elapsed_seconds: data.elapsed_seconds,
+              correct_count: data.correct_count,
+              wrong_count: data.wrong_count,
+              question_statuses: {
+                ...(unitAttemptMap[String(activeUnitId)]?.question_statuses || {}),
+                [String(question.id)]: {
+                  status: data.status,
+                  student_answer: answerInput.value || '',
+                },
+              },
+            };
+            updateUnitCompletionStates();
+            renderQuestionNav();
+
+            if (data.is_complete) {
+              stopTimer();
+              showSummaryScreen({
+                wrongCount: data.wrong_count,
+                correctCount: data.correct_count,
+                passed: data.pass,
+              });
+              return;
+            }
+
+            const nextUnattemptedIndex = activeQuestions.findIndex((item) => !questionStatuses[String(item.id)]);
+            if (nextUnattemptedIndex >= 0) {
+              activeQuestionIndex = nextUnattemptedIndex;
+            }
+            renderQuestion();
+          })
+          .catch(() => {
+            feedback.textContent = 'Unable to save answer.';
+            feedback.className = 'practice-feedback incorrect';
+          });
+      });
+
+      updateUnitCompletionStates();
+    })();
+  </script>
+{% endif %}
 {% endblock %}

@@ -1,0 +1,139 @@
+{% extends 'ui/student_base.html' %}
+
+{% block eyebrow %}Student settings{% endblock %}
+{% block page_title %}Profile{% endblock %}
+
+{% block content %}
+{% if is_editing %}
+<section class="card">
+  <div class="toolbar">
+    <div>
+      <h3>Edit Profile</h3>
+      <p class="card-subtitle">Update your student details and change your password when needed.</p>
+    </div>
+    <a href="{% url 'ui-student-profile' %}" class="button ghost">Back</a>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="onboard-grid">
+    {% csrf_token %}
+
+    <label class="field">
+      <span>First Name</span>
+      <input class="input" type="text" name="first_name" value="{{ student_profile.first_name|default:'' }}" required>
+    </label>
+
+    <label class="field">
+      <span>Last Name</span>
+      <input class="input" type="text" name="last_name" value="{{ student_profile.last_name|default:'' }}" required>
+    </label>
+
+    <label class="field">
+      <span>Email</span>
+      <input class="input" type="email" name="email" value="{{ current_user.email }}" required>
+    </label>
+
+    <label class="field">
+      <span>Father Name</span>
+      <input class="input" type="text" name="father_name" value="{{ student_profile.father_name|default:'' }}" required>
+    </label>
+
+    <label class="field">
+      <span>Mother Name</span>
+      <input class="input" type="text" name="mother_name" value="{{ student_profile.mother_name|default:'' }}" required>
+    </label>
+
+    <label class="field">
+      <span>Contact</span>
+      <input class="input" type="text" name="contact" value="{{ student_profile.contact|default:'' }}" required>
+    </label>
+
+    <label class="field">
+      <span>Date of Birth</span>
+      <input class="input" type="date" name="date_of_birth" value="{{ student_profile.date_of_birth|date:'Y-m-d' }}">
+    </label>
+
+    <label class="field">
+      <span>Grade</span>
+      <input class="input" type="text" value="{{ dashboard_grade_name|default:'-' }}" readonly>
+      <small class="field-note">Grade is managed by the teacher.</small>
+    </label>
+
+    <label class="field">
+      <span>Profile Photo</span>
+      <input class="input" type="file" name="profile_photo" accept="image/*">
+      <small class="field-note">Upload only if you want to replace your current photo.</small>
+    </label>
+
+    <div></div>
+
+    <label class="field">
+      <span>Current Password</span>
+      <input class="input" type="password" name="current_password" placeholder="Required only when changing password">
+      <small class="field-note">Leave password fields blank if you only want to update profile details.</small>
+    </label>
+
+    <label class="field">
+      <span>New Password</span>
+      <input class="input" type="password" name="new_password" placeholder="Enter new password">
+    </label>
+
+    <label class="field">
+      <span>Confirm Password</span>
+      <input class="input" type="password" name="confirm_password" placeholder="Re-enter new password">
+    </label>
+
+    <div class="onboard-actions">
+      <button class="button primary" type="submit">Save Profile</button>
+    </div>
+  </form>
+</section>
+{% else %}
+<section class="grid grid-3">
+  <article class="card stat-card">
+    <p class="stat-label">Grade</p>
+    <p class="stat-value">{{ dashboard_grade_name|default:'-' }}</p>
+    <p class="stat-meta">Current learner grade.</p>
+  </article>
+  <article class="card stat-card">
+    <p class="stat-label">Assigned</p>
+    <p class="stat-value">{{ total_assignments }}</p>
+    <p class="stat-meta">Lessons currently available to you.</p>
+  </article>
+  <article class="card stat-card">
+    <p class="stat-label">Pending</p>
+    <p class="stat-value">{{ pending_count }}</p>
+    <p class="stat-meta">Lessons not submitted yet.</p>
+  </article>
+</section>
+
+<section class="card">
+  <div class="toolbar">
+    <div>
+      <h3>Profile Details</h3>
+      <p class="card-subtitle">Review your student information and open edit mode when you need to update it.</p>
+    </div>
+    <a href="{% url 'ui-student-profile' %}?edit=1" class="button primary">Edit Profile</a>
+  </div>
+
+  <div class="grid grid-3">
+    <article class="curriculum-form-card">
+      <p class="stat-label">Student</p>
+      <p class="list-title">{{ student_profile.first_name }} {{ student_profile.last_name }}</p>
+      <p class="stat-meta">{{ current_user.email }}</p>
+    </article>
+    <article class="curriculum-form-card">
+      <p class="stat-label">Family</p>
+      <p class="list-title">{{ student_profile.father_name|default:'-' }}</p>
+      <p class="stat-meta">Father</p>
+      <p class="list-title">{{ student_profile.mother_name|default:'-' }}</p>
+      <p class="stat-meta">Mother</p>
+    </article>
+    <article class="curriculum-form-card">
+      <p class="stat-label">Contact</p>
+      <p class="list-title">{{ student_profile.contact|default:'-' }}</p>
+      <p class="stat-meta">Date of birth: {{ student_profile.date_of_birth|date:"d M Y"|default:'-' }}</p>
+    </article>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

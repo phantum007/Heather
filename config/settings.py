@@ -102,7 +102,7 @@ DATABASES = {
         'PORT': os.environ.get('PGPORT'),
         'OPTIONS': {
             'sslmode': 'require',
-        },
+        }
     }
 }
 

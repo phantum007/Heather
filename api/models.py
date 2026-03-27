@@ -142,3 +142,42 @@ class StudentAnswer(models.Model):
         db_table = 'student_answers'
         managed = False
         unique_together = ('question', 'student')
+
+
+class CurriculumUnitAttempt(models.Model):
+    STATUS_IN_PROGRESS = 'in_progress'
+    STATUS_PASSED = 'passed'
+    STATUS_FAILED = 'failed'
+    STATUS_CHOICES = (
+        (STATUS_IN_PROGRESS, 'In Progress'),
+        (STATUS_PASSED, 'Passed'),
+        (STATUS_FAILED, 'Failed'),
+    )
+
+    student = models.ForeignKey(AppUser, on_delete=models.CASCADE, db_column='student_id', related_name='curriculum_unit_attempts')
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, db_column='unit_id', related_name='attempts')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_PROGRESS)
+    elapsed_seconds = models.PositiveIntegerField(default=0)
+    correct_count = models.PositiveIntegerField(default=0)
+    wrong_count = models.PositiveIntegerField(default=0)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField()
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'curriculum_unit_attempts'
+        managed = False
+        unique_together = ('student', 'unit')
+
+
+class CurriculumQuestionAttempt(models.Model):
+    unit_attempt = models.ForeignKey(CurriculumUnitAttempt, on_delete=models.CASCADE, db_column='unit_attempt_id', related_name='question_attempts')
+    curriculum_question = models.ForeignKey(CurriculumQuestion, on_delete=models.CASCADE, db_column='curriculum_question_id', related_name='attempts')
+    student_answer = models.TextField()
+    is_correct = models.BooleanField()
+    attempted_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'curriculum_question_attempts'
+        managed = False
+        unique_together = ('unit_attempt', 'curriculum_question')

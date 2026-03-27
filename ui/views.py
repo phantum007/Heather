@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
-from django.http import FileResponse, Http404, HttpResponseForbidden
+from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils._os import safe_join
@@ -17,6 +17,8 @@ from api.models import (
     AppUser,
     Assignment,
     CurriculumQuestion,
+    CurriculumQuestionAttempt,
+    CurriculumUnitAttempt,
     Grade,
     LessonType,
     Question,
@@ -123,6 +125,19 @@ def _curriculum_name_exists(item_type, value, *, parent_id=None, item=None):
     return queryset.exists()
 
 
+def _question_order_exists(unit_id, order_value, *, item=None):
+    if order_value in (None, ''):
+        return False
+
+    queryset = CurriculumQuestion.objects.filter(
+        unit_id=unit_id,
+        order=int(order_value),
+    )
+    if item is not None:
+        queryset = queryset.exclude(id=item.id)
+    return queryset.exists()
+
+
 def _save_profile_photo(profile_photo):
     if not profile_photo:
         return ''
@@ -165,7 +180,7 @@ def home(request):
     if user.role == 'teacher':
         return redirect('ui-teacher-dashboard')
     if user.role == 'student':
-        return redirect('ui-student-dashboard')
+        return redirect('ui-student-assignments')
     return redirect('ui-login')
 
 
@@ -185,7 +200,7 @@ def login_view(request):
             if user.role == 'teacher':
                 return redirect('ui-teacher-dashboard')
             if user.role == 'student':
-                return redirect('ui-student-dashboard')
+                return redirect('ui-student-assignments')
         else:
             messages.error(request, 'Invalid credentials')
 
@@ -283,8 +298,8 @@ def teacher_curriculum(request):
                         messages.error(request, 'Question text, answer, and unit are required.')
                     elif question_order and (not question_order.isdigit() or int(question_order) < 1):
                         messages.error(request, 'Order must be a positive number.')
-                    elif _curriculum_name_exists('question', question_text, parent_id=int(parent_id)):
-                        messages.error(request, 'This question already exists for the selected unit.')
+                    elif _question_order_exists(int(parent_id), question_order):
+                        messages.error(request, 'Order must be unique for the selected unit.')
                     else:
                         CurriculumQuestion.objects.create(
                             unit_id=int(parent_id),
@@ -362,8 +377,8 @@ def teacher_edit_curriculum_item(request, item_type, item_id):
                 messages.error(request, 'Question text and answer are required.')
             elif order_value and (not order_value.isdigit() or int(order_value) < 1):
                 messages.error(request, 'Order must be a positive number.')
-            elif _curriculum_name_exists('question', value, parent_id=item.unit_id, item=item):
-                messages.error(request, 'This question already exists for the selected unit.')
+            elif _question_order_exists(item.unit_id, order_value, item=item):
+                messages.error(request, 'Order must be unique for the selected unit.')
             else:
                 item.question_text = value
                 item.answer_text = answer
@@ -891,35 +906,159 @@ def teacher_results(request):
     )
 
 
+def _student_available_assignments(user_id, grade_id=None, *, category='all'):
+    today = timezone.localdate()
+    submitted_answers = StudentAnswer.objects.filter(
+        question__assignment_id=OuterRef('pk'),
+        student_id=user_id,
+    )
+    assignments_queryset = Assignment.objects.filter(student_id=user_id)
+
+    if category == Assignment.KIND_HOMEWORK:
+        assignments_queryset = assignments_queryset.filter(assignment_kind=Assignment.KIND_HOMEWORK)
+    elif category == Assignment.KIND_CLASSROOM:
+        assignments_queryset = assignments_queryset.filter(
+            assignment_kind=Assignment.KIND_CLASSROOM,
+            available_on=today,
+        )
+    else:
+        assignments_queryset = assignments_queryset.filter(
+            Q(assignment_kind=Assignment.KIND_HOMEWORK) |
+            Q(assignment_kind=Assignment.KIND_CLASSROOM, available_on=today)
+        )
+
+    if grade_id:
+        assignments_queryset = assignments_queryset.filter(lesson__grade_id=grade_id)
+
+    return list(
+        assignments_queryset
+        .select_related('lesson__grade', 'teacher')
+        .prefetch_related('lesson__sub_lessons__units__curriculum_questions')
+        .annotate(is_submitted=Exists(submitted_answers))
+        .order_by('-assigned_date', '-id')
+    )
+
+
+def _build_student_lesson_tracks(lesson):
+    practice_mode_map = {
+        'listening abacus': 'listening',
+        'listening anzan': 'listening',
+        'flash anzan': 'flash',
+        'multiplication abacus': 'multiplication',
+        'multiplication anzan': 'multiplication',
+        'division abacus': 'division',
+        'division anzan': 'division',
+    }
+
+    lesson_tracks = []
+    for sub_lesson in lesson.sub_lessons.all().order_by('id'):
+        track_name = (
+            sub_lesson.sub_lesson_type_master.type_name
+            if sub_lesson.sub_lesson_type_master_id and sub_lesson.sub_lesson_type_master
+            else sub_lesson.sub_lesson_name
+        )
+        practice_mode = practice_mode_map.get(track_name.strip().lower(), 'default')
+        units = []
+        for unit in sub_lesson.units.all().order_by('id'):
+            units.append(
+                {
+                    'id': unit.id,
+                    'unit_name': unit.unit_name,
+                    'track_name': track_name,
+                    'practice_mode': practice_mode,
+                    'is_audio_mode': practice_mode in {'listening', 'multiplication', 'division'},
+                    'questions': [
+                        {
+                            'id': question.id,
+                            'question_text': question.question_text,
+                            'answer_text': question.answer_text or '',
+                        }
+                        for question in unit.curriculum_questions.all().order_by('order', 'id')
+                    ],
+                }
+            )
+        lesson_tracks.append(
+            {
+                'id': sub_lesson.id,
+                'name': track_name,
+                'practice_mode': practice_mode,
+                'units': units,
+            }
+        )
+    return lesson_tracks
+
+
+def _populate_student_assignment_totals(assignments):
+    for assignment in assignments:
+        total_units = 0
+        total_questions = 0
+        for sub_lesson in assignment.lesson.sub_lessons.all():
+            units = list(sub_lesson.units.all())
+            total_units += len(units)
+            total_questions += sum(unit.curriculum_questions.count() for unit in units)
+        assignment.total_units = total_units
+        assignment.total_curriculum_questions = total_questions
+
+
+def _serialize_unit_attempts(student_id, lesson_tracks):
+    unit_ids = [
+        unit['id']
+        for track in lesson_tracks
+        for unit in track['units']
+    ]
+    if not unit_ids:
+        return {}
+
+    attempts = (
+        CurriculumUnitAttempt.objects
+        .filter(student_id=student_id, unit_id__in=unit_ids)
+        .prefetch_related('question_attempts')
+    )
+
+    attempt_map = {}
+    for attempt in attempts:
+        question_statuses = {
+            item.curriculum_question_id: {
+                'status': 'correct' if item.is_correct else 'incorrect',
+                'student_answer': item.student_answer,
+            }
+            for item in attempt.question_attempts.all()
+        }
+        attempt_map[attempt.unit_id] = {
+            'status': attempt.status,
+            'elapsed_seconds': attempt.elapsed_seconds,
+            'correct_count': attempt.correct_count,
+            'wrong_count': attempt.wrong_count,
+            'completed_at': attempt.completed_at.isoformat() if attempt.completed_at else None,
+            'question_statuses': question_statuses,
+        }
+    return attempt_map
+
+
 def student_dashboard(request):
     user, response = _student_guard(request)
     if response:
         return response
 
     profile = StudentProfile.objects.select_related('grade').filter(user_id=user.id).first()
-    today = timezone.localdate()
-    submitted_answers = StudentAnswer.objects.filter(
-        question__assignment_id=OuterRef('pk'),
-        student_id=user.id,
+    assignments = _student_available_assignments(
+        user.id,
+        profile.grade_id if profile and profile.grade_id else None,
     )
-    assignments_queryset = Assignment.objects.filter(student_id=user.id).filter(
-        Q(assignment_kind=Assignment.KIND_HOMEWORK) |
-        Q(assignment_kind=Assignment.KIND_CLASSROOM, available_on=today)
-    )
-    if profile and profile.grade_id:
-        assignments_queryset = assignments_queryset.filter(lesson__grade_id=profile.grade_id)
-    assignments = list(
-        assignments_queryset
-        .select_related('lesson__grade', 'teacher')
-        .annotate(is_submitted=Exists(submitted_answers))
-        .order_by('-assigned_date')
-    )
+    _populate_student_assignment_totals(assignments)
+    homework_assignments = [assignment for assignment in assignments if assignment.assignment_kind == Assignment.KIND_HOMEWORK]
+    classroom_assignments = [assignment for assignment in assignments if assignment.assignment_kind == Assignment.KIND_CLASSROOM]
 
     total_assignments = len(assignments)
     submitted_count = sum(1 for assignment in assignments if assignment.is_submitted)
     pending_count = total_assignments - submitted_count
 
     latest_assignment = assignments[0] if assignments else None
+    dashboard_grade_name = None
+    if profile and profile.grade:
+        dashboard_grade_name = profile.grade.grade_name
+    elif latest_assignment and latest_assignment.lesson and latest_assignment.lesson.grade:
+        dashboard_grade_name = latest_assignment.lesson.grade.grade_name
 
     return render(
         request,
@@ -932,6 +1071,117 @@ def student_dashboard(request):
             'submitted_count': submitted_count,
             'pending_count': pending_count,
             'latest_assignment': latest_assignment,
+            'homework_count': len(homework_assignments),
+            'classroom_count': len(classroom_assignments),
+            'dashboard_grade_name': dashboard_grade_name,
+        },
+    )
+
+
+@require_http_methods(['GET', 'POST'])
+def student_profile(request):
+    user, response = _student_guard(request)
+    if response:
+        return response
+
+    profile = get_object_or_404(StudentProfile.objects.select_related('grade'), user_id=user.id)
+    assignments = _student_available_assignments(
+        user.id,
+        profile.grade_id if profile and profile.grade_id else None,
+    )
+    total_assignments = len(assignments)
+    submitted_count = sum(1 for assignment in assignments if assignment.is_submitted)
+    pending_count = total_assignments - submitted_count
+    latest_assignment = assignments[0] if assignments else None
+    dashboard_grade_name = '-'
+    if profile.grade:
+        dashboard_grade_name = profile.grade.grade_name
+    elif latest_assignment and latest_assignment.lesson and latest_assignment.lesson.grade:
+        dashboard_grade_name = latest_assignment.lesson.grade.grade_name
+    is_editing = request.GET.get('edit') == '1' or request.method == 'POST'
+
+    if request.method == 'POST':
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        date_of_birth = request.POST.get('date_of_birth', '').strip()
+        father_name = request.POST.get('father_name', '').strip()
+        mother_name = request.POST.get('mother_name', '').strip()
+        email = request.POST.get('email', '').strip().lower()
+        contact = request.POST.get('contact', '').strip()
+        profile_photo = request.FILES.get('profile_photo')
+        current_password = request.POST.get('current_password', '')
+        new_password = request.POST.get('new_password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+
+        if not first_name or not last_name or not father_name or not mother_name or not email or not contact:
+            messages.error(
+                request,
+                'First name, last name, father name, mother name, email, and contact are required.',
+            )
+        elif AppUser.objects.exclude(id=user.id).filter(email=email).exists():
+            messages.error(request, 'A user with that email already exists.')
+        elif new_password or confirm_password or current_password:
+            if not current_password:
+                messages.error(request, 'Current password is required to set a new password.')
+            elif not bcrypt.checkpw(current_password.encode('utf-8'), user.password.encode('utf-8')):
+                messages.error(request, 'Current password is incorrect.')
+            elif not new_password:
+                messages.error(request, 'New password is required.')
+            elif new_password != confirm_password:
+                messages.error(request, 'New password and confirm password must match.')
+            else:
+                with transaction.atomic():
+                    user.name = f'{first_name} {last_name}'.strip()
+                    user.email = email
+                    user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                    user.save(update_fields=['name', 'email', 'password'])
+
+                    if profile_photo:
+                        _delete_profile_photo(profile.profile_photo)
+                        profile.profile_photo = _save_profile_photo(profile_photo)
+
+                    profile.first_name = first_name
+                    profile.last_name = last_name
+                    profile.date_of_birth = date_of_birth or None
+                    profile.father_name = father_name
+                    profile.mother_name = mother_name
+                    profile.contact = contact
+                    profile.save()
+
+                messages.success(request, 'Profile and password updated successfully.')
+                return redirect('ui-student-profile')
+        else:
+            with transaction.atomic():
+                user.name = f'{first_name} {last_name}'.strip()
+                user.email = email
+                user.save(update_fields=['name', 'email'])
+
+                if profile_photo:
+                    _delete_profile_photo(profile.profile_photo)
+                    profile.profile_photo = _save_profile_photo(profile_photo)
+
+                profile.first_name = first_name
+                profile.last_name = last_name
+                profile.date_of_birth = date_of_birth or None
+                profile.father_name = father_name
+                profile.mother_name = mother_name
+                profile.contact = contact
+                profile.save()
+
+            messages.success(request, 'Profile updated successfully.')
+            return redirect('ui-student-profile')
+
+    return render(
+        request,
+        'ui/student_profile.html',
+        {
+            'current_user': user,
+            'student_profile': profile,
+            'dashboard_grade_name': dashboard_grade_name,
+            'total_assignments': total_assignments,
+            'submitted_count': submitted_count,
+            'pending_count': pending_count,
+            'is_editing': is_editing,
         },
     )
 
@@ -942,60 +1192,38 @@ def student_assignments(request):
         return response
 
     profile = StudentProfile.objects.select_related('grade').filter(user_id=user.id).first()
+    category = request.GET.get('category', 'all').strip().lower()
+    if category not in {'all', Assignment.KIND_HOMEWORK, Assignment.KIND_CLASSROOM}:
+        category = 'all'
     selected_assignment_id = request.GET.get('assignment_id', '').strip()
-    today = timezone.localdate()
-    submitted_answers = StudentAnswer.objects.filter(
-        question__assignment_id=OuterRef('pk'),
-        student_id=user.id,
+    assignments = _student_available_assignments(
+        user.id,
+        profile.grade_id if profile and profile.grade_id else None,
+        category=category,
     )
-    assignments_queryset = Assignment.objects.filter(student_id=user.id).filter(
-        Q(assignment_kind=Assignment.KIND_HOMEWORK) |
-        Q(assignment_kind=Assignment.KIND_CLASSROOM, available_on=today)
-    )
-    if profile and profile.grade_id:
-        assignments_queryset = assignments_queryset.filter(lesson__grade_id=profile.grade_id)
-    assignments = list(
-        assignments_queryset
-        .select_related('lesson__grade', 'teacher')
-        .annotate(is_submitted=Exists(submitted_answers))
-        .order_by('-assigned_date')
-    )
+    _populate_student_assignment_totals(assignments)
 
     selected_assignment = None
-    assignment_detail = None
+    lesson_tracks = []
+    unit_attempt_map = {}
     if selected_assignment_id:
-        selected_assignment_queryset = Assignment.objects.select_related('lesson__grade', 'teacher').prefetch_related('questions__answers').filter(
+        selected_assignment_queryset = Assignment.objects.select_related('lesson__grade', 'teacher').prefetch_related(
+            'questions__answers',
+            'lesson__sub_lessons__sub_lesson_type_master',
+            'lesson__sub_lessons__units__curriculum_questions',
+        ).filter(
             student_id=user.id,
         )
         if profile and profile.grade_id:
             selected_assignment_queryset = selected_assignment_queryset.filter(lesson__grade_id=profile.grade_id)
+        if category in {Assignment.KIND_HOMEWORK, Assignment.KIND_CLASSROOM}:
+            selected_assignment_queryset = selected_assignment_queryset.filter(assignment_kind=category)
         selected_assignment = get_object_or_404(
             selected_assignment_queryset,
             id=selected_assignment_id,
         )
-        questions = []
-        correct = 0
-        for question in selected_assignment.questions.all().order_by('id'):
-            answer = next((item for item in question.answers.all() if item.student_id == user.id), None)
-            if answer and answer.is_correct:
-                correct += 1
-            questions.append(
-                {
-                    'question_text': question.question_text,
-                    'student_answer': answer.student_answer if answer else '',
-                    'correct_answer': question.correct_answer,
-                    'is_correct': bool(answer and answer.is_correct),
-                }
-            )
-
-        total = len(questions)
-        assignment_detail = {
-            'assignment': selected_assignment,
-            'questions': questions,
-            'correct': correct,
-            'total': total,
-            'percentage': round((correct / total) * 100) if total else 0,
-        }
+        lesson_tracks = _build_student_lesson_tracks(selected_assignment.lesson)
+        unit_attempt_map = _serialize_unit_attempts(user.id, lesson_tracks)
 
     return render(
         request,
@@ -1004,7 +1232,99 @@ def student_assignments(request):
             'current_user': user,
             'student_profile': profile,
             'assignments': assignments,
+            'assignment_category': category,
             'selected_assignment_id': selected_assignment_id,
-            'assignment_detail': assignment_detail,
+            'selected_assignment': selected_assignment,
+            'lesson_tracks': lesson_tracks,
+            'unit_attempt_map': unit_attempt_map,
         },
+    )
+
+
+@require_http_methods(['POST'])
+def student_submit_unit_question(request):
+    user, response = _student_guard(request)
+    if response:
+        return response
+
+    unit_id = request.POST.get('unit_id', '').strip()
+    question_id = request.POST.get('question_id', '').strip()
+    student_answer = request.POST.get('student_answer', '')
+    elapsed_seconds = request.POST.get('elapsed_seconds', '').strip()
+
+    if not unit_id or not question_id:
+        return JsonResponse({'message': 'unit_id and question_id are required.'}, status=400)
+
+    if elapsed_seconds and (not elapsed_seconds.isdigit() or int(elapsed_seconds) < 0):
+        return JsonResponse({'message': 'elapsed_seconds must be a non-negative number.'}, status=400)
+
+    unit = get_object_or_404(Unit, id=unit_id)
+    question = get_object_or_404(CurriculumQuestion, id=question_id, unit_id=unit.id)
+    normalized_answer = (student_answer or '').strip()
+    is_correct = normalized_answer.lower() == (question.answer_text or '').strip().lower()
+
+    with transaction.atomic():
+        attempt, created = CurriculumUnitAttempt.objects.get_or_create(
+            student_id=user.id,
+            unit_id=unit.id,
+            defaults={
+                'status': CurriculumUnitAttempt.STATUS_IN_PROGRESS,
+                'elapsed_seconds': int(elapsed_seconds or '0'),
+                'correct_count': 0,
+                'wrong_count': 0,
+                'created_at': timezone.now(),
+                'updated_at': timezone.now(),
+            },
+        )
+        if not created:
+            attempt.elapsed_seconds = int(elapsed_seconds or attempt.elapsed_seconds or 0)
+            attempt.updated_at = timezone.now()
+            attempt.save(update_fields=['elapsed_seconds', 'updated_at'])
+
+        question_attempt, qa_created = CurriculumQuestionAttempt.objects.get_or_create(
+            unit_attempt_id=attempt.id,
+            curriculum_question_id=question.id,
+            defaults={
+                'student_answer': normalized_answer,
+                'is_correct': is_correct,
+                'attempted_at': timezone.now(),
+            },
+        )
+        if not qa_created:
+            return JsonResponse({'message': 'This question was already attempted.'}, status=400)
+
+        total_questions = unit.curriculum_questions.count()
+        answered_attempts = list(attempt.question_attempts.all())
+        correct_count = sum(1 for item in answered_attempts if item.is_correct)
+        wrong_count = len(answered_attempts) - correct_count
+        is_complete = len(answered_attempts) >= total_questions and total_questions > 0
+
+        attempt.correct_count = correct_count
+        attempt.wrong_count = wrong_count
+        attempt.elapsed_seconds = int(elapsed_seconds or attempt.elapsed_seconds or 0)
+        if is_complete:
+            attempt.status = (
+                CurriculumUnitAttempt.STATUS_PASSED
+                if wrong_count <= 2
+                else CurriculumUnitAttempt.STATUS_FAILED
+            )
+            attempt.completed_at = timezone.now()
+        else:
+            attempt.status = CurriculumUnitAttempt.STATUS_IN_PROGRESS
+            attempt.completed_at = None
+        attempt.updated_at = timezone.now()
+        attempt.save(update_fields=['correct_count', 'wrong_count', 'elapsed_seconds', 'status', 'completed_at', 'updated_at'])
+
+    return JsonResponse(
+        {
+            'question_id': question.id,
+            'is_correct': is_correct,
+            'status': 'correct' if is_correct else 'incorrect',
+            'correct_count': attempt.correct_count,
+            'wrong_count': attempt.wrong_count,
+            'elapsed_seconds': attempt.elapsed_seconds,
+            'is_complete': is_complete,
+            'attempt_status': attempt.status,
+            'pass': attempt.status == CurriculumUnitAttempt.STATUS_PASSED,
+        }
     )
