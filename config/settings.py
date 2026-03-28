@@ -30,27 +30,16 @@ def _parse_jwt_expiry(raw_value: str) -> timedelta:
     return timedelta(seconds=int(value))
 
 
-def _parse_csv_env(raw_value: str) -> list[str]:
-    return [item.strip() for item in (raw_value or '').split(',') if item.strip()]
-
-
 SECRET_KEY = os.getenv('JWT_SECRET', 'super_secret_change_me')
 DEBUG = False
 # os.getenv('DEBUG', 'true').lower() == 'true'
+# ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()]
 
-ALLOWED_HOSTS = _parse_csv_env(
-    os.getenv(
-        'ALLOWED_HOSTS',
-        '.run.app,.railway.app,localhost,127.0.0.1',
-    )
-)
-CSRF_TRUSTED_ORIGINS = _parse_csv_env(
-    os.getenv(
-        'CSRF_TRUSTED_ORIGINS',
-        'https://*.run.app,https://*.railway.app',
-    )
-)
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.railway.app",
+]
+
+ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'django.contrib.contenttypes',
@@ -99,10 +88,6 @@ WSGI_APPLICATION = 'config.wsgi.application'
 #         'PASSWORD': os.getenv('DB_PASSWORD', ''),
 #         'HOST': os.getenv('DB_HOST', 'localhost'),
 #         'PORT': os.getenv('DB_PORT', '5432'),
-#         'OPTIONS': {
-#             **({'sslmode': os.getenv('DB_SSLMODE')} if os.getenv('DB_SSLMODE') else {}),
-#             **({'channel_binding': os.getenv('DB_CHANNEL_BINDING')} if os.getenv('DB_CHANNEL_BINDING') else {}),
-#         },
 #     }
 # }
 

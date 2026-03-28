@@ -431,7 +431,7 @@
         const question = activeQuestions[activeQuestionIndex];
         const hasRemainingQuestions = activeQuestions.some((item) => !questionStatuses[String(item.id)]);
         clearFlashSequence();
-        stageQuestion.classList.remove('practice-stage-question-listening', 'practice-stage-question-flash');
+        stageQuestion.classList.remove('practice-stage-question-listening', 'practice-stage-question-flash', 'practice-stage-question-arithmetic');
         if (!question) {
           stageQuestion.textContent = 'No questions found';
           answerInput.value = '';
@@ -476,7 +476,26 @@
           };
           runFlashStep();
         } else {
-          stageQuestion.textContent = question.question_text;
+          const arithmeticLines = String(question.question_text)
+            .split(/\n+/)
+            .map((part) => part.trim())
+            .filter(Boolean);
+          const looksArithmetic = arithmeticLines.length > 1 && arithmeticLines.every((line, index) => (
+            index === 0 ? !/^[+\-x/]/.test(line) : /^[+\-x/]/.test(line)
+          ));
+
+          if (looksArithmetic) {
+            const rows = arithmeticLines.map((line, index) => {
+              if (index === 0) {
+                return `<div class="practice-arithmetic-line"><span class="practice-arithmetic-operator is-blank">+</span><span class="practice-arithmetic-value">${line}</span></div>`;
+              }
+              return `<div class="practice-arithmetic-line"><span class="practice-arithmetic-operator">${line.charAt(0)}</span><span class="practice-arithmetic-value">${line.slice(1)}</span></div>`;
+            }).join('');
+            stageQuestion.innerHTML = `<div class="practice-arithmetic-stack">${rows}</div>`;
+            stageQuestion.classList.add('practice-stage-question-arithmetic');
+          } else {
+            stageQuestion.textContent = question.question_text;
+          }
         }
         speakQuestion(question.question_text);
         const isLocked = Boolean(questionStatuses[String(question.id)]);
