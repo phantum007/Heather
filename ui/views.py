@@ -1317,6 +1317,24 @@ def student_submit_unit_question(request):
             },
         )
         if not created:
+            if attempt.status == CurriculumUnitAttempt.STATUS_FAILED:
+                attempt.question_attempts.all().delete()
+                attempt.status = CurriculumUnitAttempt.STATUS_IN_PROGRESS
+                attempt.elapsed_seconds = int(elapsed_seconds or '0')
+                attempt.correct_count = 0
+                attempt.wrong_count = 0
+                attempt.completed_at = None
+                attempt.updated_at = timezone.now()
+                attempt.save(
+                    update_fields=[
+                        'status',
+                        'elapsed_seconds',
+                        'correct_count',
+                        'wrong_count',
+                        'completed_at',
+                        'updated_at',
+                    ]
+                )
             attempt.elapsed_seconds = int(elapsed_seconds or attempt.elapsed_seconds or 0)
             attempt.updated_at = timezone.now()
             attempt.save(update_fields=['elapsed_seconds', 'updated_at'])
