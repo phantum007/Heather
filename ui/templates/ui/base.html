@@ -287,13 +287,45 @@
       .hero, .toolbar, .topbar, .list-card, .toolbar-actions, .student-card-actions, .tree-node-shell, .sidebar-topbar { flex-direction:column; grid-template-columns:1fr; align-items:stretch; }
       .lesson-track-header, .lesson-card-top, .sublesson-focus-header, .practice-track-action-bar { flex-direction:column; align-items:stretch; }
       .onboard-actions { align-items:stretch; }
+      .practice-modal { padding:12px; }
+      .practice-modal-shell { width:100%; height:min(100vh - 24px, 100%); border-radius:24px; }
+      .practice-modal-head { padding:16px; }
+      .practice-modal-body { padding:16px; gap:16px; overflow:auto; grid-template-columns:1fr; grid-template-areas:'nav' 'stage'; }
+      .practice-question-nav { grid-area:nav; display:flex; gap:10px; overflow-x:auto; overflow-y:hidden; padding:0 2px 6px; }
+      .practice-question-nav button { min-width:140px; flex:0 0 auto; }
+      .practice-stage, .practice-summary { grid-area:stage; }
+      .practice-stage { padding:16px; border-radius:22px; }
       .practice-stage-question { font-size:52px; }
+      .practice-stage-question.practice-stage-question-arithmetic { font-size:44px; }
       .practice-stage-question.practice-stage-question-flash { font-size:96px; }
+      .practice-answer-box { border-radius:20px; }
+      .practice-answer-icon { min-height:92px; font-size:44px; }
+      .practice-answer-input { padding:18px; font-size:22px; }
+      .practice-stage-actions { flex-direction:column; align-items:stretch; }
+      .practice-stage-actions .button { width:100%; }
       .practice-summary-title { font-size:38px; }
       .practice-summary-copy { font-size:18px; }
     }
     @media (max-width: 560px) {
       .practice-unit-grid { grid-template-columns:repeat(auto-fit, minmax(48px, 1fr)); }
+      .practice-modal { padding:8px; }
+      .practice-modal-shell { height:calc(100vh - 16px); border-radius:20px; }
+      .practice-modal-head { padding:14px; }
+      .practice-timer { font-size:14px; }
+      .practice-close { width:42px; height:42px; border-radius:14px; font-size:24px; }
+      .practice-modal-body { padding:12px; gap:12px; }
+      .practice-question-nav { gap:8px; padding-bottom:4px; }
+      .practice-question-nav button { min-width:120px; padding:10px 12px; border-radius:14px; }
+      .practice-stage { padding:14px; gap:14px; border-radius:18px; }
+      .practice-stage-question { font-size:40px; padding:6px; }
+      .practice-stage-question.practice-stage-question-arithmetic { font-size:36px; }
+      .practice-arithmetic-stack { border-spacing:0 10px; }
+      .practice-arithmetic-operator { width:34px; padding-right:12px; }
+      .practice-answer-box { grid-template-columns:88px minmax(0, 1fr); border-radius:18px; }
+      .practice-answer-icon { min-height:76px; font-size:36px; }
+      .practice-answer-input { padding:14px; font-size:18px; }
+      .practice-feedback { font-size:14px; }
+      .practice-stage-actions { gap:10px; }
     }
   </style>
 </head>
