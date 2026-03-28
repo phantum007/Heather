@@ -38,11 +38,16 @@ SECRET_KEY = os.getenv('JWT_SECRET', 'super_secret_change_me')
 DEBUG = False
 # os.getenv('DEBUG', 'true').lower() == 'true'
 
-ALLOWED_HOSTS = _parse_csv_env(os.getenv('ALLOWED_HOSTS', '*')) or ['*']
+ALLOWED_HOSTS = _parse_csv_env(
+    os.getenv(
+        'ALLOWED_HOSTS',
+        '.run.app,.railway.app,localhost,127.0.0.1',
+    )
+)
 CSRF_TRUSTED_ORIGINS = _parse_csv_env(
     os.getenv(
         'CSRF_TRUSTED_ORIGINS',
-        'https://*.railway.app,https://*.run.app',
+        'https://*.run.app,https://*.railway.app',
     )
 )
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
