@@ -190,6 +190,7 @@
       const title = document.getElementById('practice-modal-title');
       const nav = document.getElementById('practice-question-nav');
       const stageQuestion = document.getElementById('practice-stage-question');
+      const answerIcon = document.querySelector('.practice-answer-icon');
       const answerInput = document.getElementById('practice-answer-input');
       const feedback = document.getElementById('practice-feedback');
       const checkButton = document.getElementById('practice-check-answer');
@@ -203,7 +204,7 @@
       const toListButton = document.getElementById('practice-to-list');
       const nextUnitButton = document.getElementById('practice-next-unit');
 
-      if (!modal || !title || !nav || !stageQuestion || !answerInput || !feedback || !checkButton || !timer || !summary || !summaryTitle || !summaryCopy || !summaryScore || !summaryWrong || !summaryTime || !toListButton || !nextUnitButton) {
+      if (!modal || !title || !nav || !stageQuestion || !answerIcon || !answerInput || !feedback || !checkButton || !timer || !summary || !summaryTitle || !summaryCopy || !summaryScore || !summaryWrong || !summaryTime || !toListButton || !nextUnitButton) {
         return;
       }
 
@@ -259,6 +260,16 @@
           correctCount: entry.correct_count || 0,
           wrongCount: entry.wrong_count || 0,
         };
+      }
+
+      function updateAnswerIcon() {
+        if (activePracticeMode === 'multiplication') {
+          answerIcon.textContent = 'X';
+        } else if (activePracticeMode === 'division') {
+          answerIcon.textContent = '/';
+        } else {
+          answerIcon.textContent = '+';
+        }
       }
 
       function startTimer(initialSeconds) {
@@ -524,6 +535,7 @@
         questionStatuses = isRetryingFailedUnit ? {} : (savedState.statuses || {});
         activePracticeMode = practiceMode || 'default';
         activeAudioMode = Boolean(audioMode);
+        updateAnswerIcon();
         const nextUnattemptedIndex = activeQuestions.findIndex((item) => !questionStatuses[String(item.id)]);
         activeQuestionIndex = nextUnattemptedIndex >= 0 ? nextUnattemptedIndex : 0;
         title.textContent = unitPath || 'Unit';
