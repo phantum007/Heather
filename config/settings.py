@@ -73,7 +73,7 @@ def _database_settings() -> dict:
 SECRET_KEY = os.getenv('JWT_SECRET', 'super_secret_change_me')
 DEBUG = _env_flag('DEBUG')
 
-default_csrf_trusted_origins = ['https://*.railway.app', 'https://*.run.app']
+default_csrf_trusted_origins = ['https://*.up.railway.app', 'https://*.run.app']
 if os.getenv('RAILWAY_PUBLIC_DOMAIN'):
     default_csrf_trusted_origins.append(f"https://{os.getenv('RAILWAY_PUBLIC_DOMAIN')}")
 if os.getenv('APP_DOMAIN'):
@@ -83,7 +83,7 @@ if os.getenv('APP_URL', '').startswith('https://'):
 
 CSRF_TRUSTED_ORIGINS = _csv_env('CSRF_TRUSTED_ORIGINS', default_csrf_trusted_origins)
 
-default_allowed_hosts = ['*']
+default_allowed_hosts = ['*.up.railway.app', '*.run.app', 'localhost', '127.0.0.1']
 if os.getenv('RAILWAY_PUBLIC_DOMAIN'):
     default_allowed_hosts.append(os.getenv('RAILWAY_PUBLIC_DOMAIN'))
 if os.getenv('APP_DOMAIN'):
