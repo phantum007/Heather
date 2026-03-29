@@ -43,6 +43,12 @@ Important values:
 
 - `DATABASE_URL`
 - `USE_LOCAL_DB`
+- `PGHOST`
+- `PGPORT`
+- `PGDATABASE`
+- `PGUSER`
+- `PGPASSWORD`
+- `PGSSLMODE`
 - `DB_HOST`
 - `DB_PORT`
 - `DB_USER`
@@ -53,7 +59,8 @@ Important values:
 
 ## Notes
 
-- `DATABASE_URL` is the hosted database setting and supports providers like Neon.
+- `DATABASE_URL` is the preferred hosted database setting.
+- Railway deployments can also use the standard `PG*` environment variables Railway injects automatically.
 - Set `USE_LOCAL_DB=true` to force the app to use the local `DB_*` values instead of `DATABASE_URL`.
 - The Django models map onto the existing PostgreSQL tables used by the old backend.
 - The frontend now defaults to `http://127.0.0.1:8000/api`.
@@ -70,3 +77,12 @@ gcloud run services update SERVICE_NAME \
   --region=REGION \
   --update-env-vars="DATABASE_URL=postgresql://neondb_owner:npg_BhaM8JbHok5I@ep-broad-dawn-am4h60kv-pooler.c-5.us-east-1.aws.neon.tech/abacus?sslmode=require&channel_binding=require"
 ```
+
+## Railway
+
+This branch is ready to deploy on Railway using either:
+
+- `DATABASE_URL`
+- Railway-managed `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, and `PGSSLMODE`
+
+If Railway provides `RAILWAY_PUBLIC_DOMAIN`, the default allowed hosts and CSRF trusted origins will include it automatically.
