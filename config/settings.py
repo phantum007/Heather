@@ -31,15 +31,38 @@ def _parse_jwt_expiry(raw_value: str) -> timedelta:
 
 
 SECRET_KEY = os.getenv('JWT_SECRET', 'super_secret_change_me')
-DEBUG = False
-# os.getenv('DEBUG', 'true').lower() == 'true'
-# ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()]
+DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
+
+default_csrf_trusted_origins = ['https://*.railway.app', 'https://*.run.app']
+if os.getenv('RAILWAY_PUBLIC_DOMAIN'):
+    default_csrf_trusted_origins.append(f"https://{os.getenv('RAILWAY_PUBLIC_DOMAIN')}")
+if os.getenv('APP_DOMAIN'):
+    default_csrf_trusted_origins.append(f"https://{os.getenv('APP_DOMAIN')}")
+if os.getenv('APP_URL', '').startswith('https://'):
+    default_csrf_trusted_origins.append(os.getenv('APP_URL'))
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://*.railway.app",
+    origin.strip()
+    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', ','.join(default_csrf_trusted_origins)).split(',')
+    if origin.strip()
 ]
 
-ALLOWED_HOSTS = ['*']
+default_allowed_hosts = ['*']
+if os.getenv('RAILWAY_PUBLIC_DOMAIN'):
+    default_allowed_hosts.append(os.getenv('RAILWAY_PUBLIC_DOMAIN'))
+if os.getenv('APP_DOMAIN'):
+    default_allowed_hosts.append(os.getenv('APP_DOMAIN'))
+
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv('ALLOWED_HOSTS', ','.join(default_allowed_hosts)).split(',')
+    if host.strip()
+] or ['*']
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
 
 INSTALLED_APPS = [
     'django.contrib.contenttypes',
@@ -83,11 +106,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # DATABASES = {
 #     'default': {
 #         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': os.getenv('DB_NAME', 'abacus_platform'),
-#         'USER': os.getenv('DB_USER', 'postgres'),
-#         'PASSWORD': os.getenv('DB_PASSWORD', ''),
-#         'HOST': os.getenv('DB_HOST', 'localhost'),
-#         'PORT': os.getenv('DB_PORT', '5432'),
+#         'NAME': os.getenv('DB_NAME') or os.getenv('PGDATABASE') or 'abacus_platform',
+#         'USER': os.getenv('DB_USER') or os.getenv('PGUSER') or 'postgres',
+#         'PASSWORD': os.getenv('DB_PASSWORD') or os.getenv('PGPASSWORD') or '',
+#         'HOST': os.getenv('DB_HOST') or os.getenv('PGHOST') or 'localhost',
+#         'PORT': os.getenv('DB_PORT') or os.getenv('PGPORT') or '5432',
 #     }
 # }
 

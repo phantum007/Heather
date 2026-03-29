@@ -22,7 +22,7 @@
         <div class="student-profile-top">
           <div class="student-photo-slot">
             {% if profile.profile_photo %}
-              <img src="/media/{{ profile.profile_photo }}" alt="{{ profile.user.name }}" class="student-photo-image">
+              <img src="{% url 'ui-serve-media' path=profile.profile_photo %}" alt="{{ profile.user.name }}" class="student-photo-image">
             {% else %}
               <span class="student-photo-initial">{{ profile.first_name|default:profile.user.name|first|default:'S' }}</span>
             {% endif %}
