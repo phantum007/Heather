@@ -42,11 +42,11 @@ def _csv_env(name: str, default_values: list[str]) -> list[str]:
 def _database_settings() -> dict:
     use_local_db = _env_flag('USE_LOCAL_DB')
 
-    name = os.getenv('PGDATABASE') or os.getenv('DB_NAME', 'abacus_platform')
-    user = os.getenv('PGUSER') or os.getenv('DB_USER', 'postgres')
-    password = os.getenv('PGPASSWORD') or os.getenv('DB_PASSWORD', '')
-    host = os.getenv('RAILWAY_SERVICE_POSTGRES_URL') or os.getenv('PGHOST') or os.getenv('DB_HOST', 'localhost')
-    port = os.getenv('PGPORT') or os.getenv('DB_PORT', '5432')
+    name = os.getenv('PGDATABASE') or 'railway'
+    user = os.getenv('PGUSER') or 'postgres'
+    password = os.getenv('PGPASSWORD') or 'faFzfZMjfiXifMdToeVbsDluGnbuKCnA'
+    host = os.getenv('RAILWAY_SERVICE_POSTGRES_URL') or os.getenv('PGHOST') or 'ballast.proxy.rlwy.net'
+    port = os.getenv('PGPORT') or '41912'
     options = {}
 
     if use_local_db:
