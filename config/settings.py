@@ -1,6 +1,7 @@
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import parse_qsl, unquote, urlparse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -39,25 +40,37 @@ def _csv_env(name: str, default_values: list[str]) -> list[str]:
     return [item.strip() for item in raw_value.split(',') if item.strip()]
 
 
+def _database_settings_from_url(database_url: str) -> dict:
+    parsed = urlparse(database_url)
+    query_options = {key: value for key, value in parse_qsl(parsed.query, keep_blank_values=True)}
+    port = str(parsed.port or 5432)
+
+    return {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': parsed.path.lstrip('/'),
+        'USER': unquote(parsed.username or ''),
+        'PASSWORD': unquote(parsed.password or ''),
+        'HOST': parsed.hostname or 'localhost',
+        'PORT': port,
+        'OPTIONS': query_options,
+    }
+
+
 def _database_settings() -> dict:
     use_local_db = _env_flag('USE_LOCAL_DB')
+    database_url = os.getenv('DATABASE_URL')
+    if database_url and not use_local_db:
+        return _database_settings_from_url(database_url)
 
-    name = os.getenv('PGDATABASE') or 'railway'
-    user = os.getenv('PGUSER') or 'postgres'
-    password = os.getenv('PGPASSWORD') or 'faFzfZMjfiXifMdToeVbsDluGnbuKCnA'
-    host = os.getenv('RAILWAY_SERVICE_POSTGRES_URL') or os.getenv('PGHOST') or 'ballast.proxy.rlwy.net'
-    port = os.getenv('PGPORT') or '41912'
+    name = os.getenv('DB_NAME', 'abacus_platform')
+    user = os.getenv('DB_USER', 'postgres')
+    password = os.getenv('DB_PASSWORD', '')
+    host = os.getenv('DB_HOST', 'localhost')
+    port = os.getenv('DB_PORT', '5432')
     options = {}
 
-    if use_local_db:
-        name = os.getenv('DB_NAME', 'abacus_platform')
-        user = os.getenv('DB_USER', 'postgres')
-        password = os.getenv('DB_PASSWORD', '')
-        host = os.getenv('DB_HOST', 'localhost')
-        port = os.getenv('DB_PORT', '5432')
-
     if host != 'localhost':
-        options['sslmode'] = os.getenv('PGSSLMODE', 'require')
+        options['sslmode'] = os.getenv('DB_SSLMODE', 'require')
 
     return {
         'ENGINE': 'django.db.backends.postgresql',
@@ -70,26 +83,25 @@ def _database_settings() -> dict:
     }
 
 
-DEFAULT_CLOUD_RUN_HOST = 'heather-gcp-1010739977872.europe-west1.run.app'
-
 SECRET_KEY = os.getenv('JWT_SECRET', 'super_secret_change_me')
 DEBUG = _env_flag('DEBUG')
 
-default_csrf_trusted_origins = ['https://*.up.railway.app', 'https://*.run.app', f'https://{DEFAULT_CLOUD_RUN_HOST}']
-if os.getenv('RAILWAY_PUBLIC_DOMAIN'):
-    default_csrf_trusted_origins.append(f"https://{os.getenv('RAILWAY_PUBLIC_DOMAIN')}")
-if os.getenv('APP_DOMAIN'):
-    default_csrf_trusted_origins.append(f"https://{os.getenv('APP_DOMAIN')}")
-if os.getenv('APP_URL', '').startswith('https://'):
-    default_csrf_trusted_origins.append(os.getenv('APP_URL'))
+default_csrf_trusted_origins = ['https://*.run.app']
+app_domain = os.getenv('APP_DOMAIN', '').strip().rstrip('/')
+app_url = os.getenv('APP_URL', '').strip().rstrip('/')
+if app_domain:
+    if app_domain.startswith('https://'):
+        default_csrf_trusted_origins.append(app_domain)
+    else:
+        default_csrf_trusted_origins.append(f'https://{app_domain}')
+if app_url.startswith('https://'):
+    default_csrf_trusted_origins.append(app_url)
 
 CSRF_TRUSTED_ORIGINS = _csv_env('CSRF_TRUSTED_ORIGINS', default_csrf_trusted_origins)
 
-default_allowed_hosts = ['.up.railway.app', '.run.app', 'localhost', '127.0.0.1', DEFAULT_CLOUD_RUN_HOST]
-if os.getenv('RAILWAY_PUBLIC_DOMAIN'):
-    default_allowed_hosts.append(os.getenv('RAILWAY_PUBLIC_DOMAIN'))
-if os.getenv('APP_DOMAIN'):
-    default_allowed_hosts.append(os.getenv('APP_DOMAIN'))
+default_allowed_hosts = ['.run.app', 'localhost', '127.0.0.1']
+if app_domain:
+    default_allowed_hosts.append(app_domain.removeprefix('https://').removeprefix('http://'))
 
 ALLOWED_HOSTS = _csv_env('ALLOWED_HOSTS', default_allowed_hosts) or ['*']
 
@@ -151,7 +163,6 @@ DATABASES = {'default': _database_settings()}
 #             'sslmode': 'require',
 #         },
 #     }}
-
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = os.getenv('TIME_ZONE', 'Europe/London')
 USE_I18N = True
