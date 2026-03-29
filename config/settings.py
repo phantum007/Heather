@@ -83,7 +83,7 @@ if os.getenv('APP_URL', '').startswith('https://'):
 
 CSRF_TRUSTED_ORIGINS = _csv_env('CSRF_TRUSTED_ORIGINS', default_csrf_trusted_origins)
 
-default_allowed_hosts = ['*.up.railway.app', '*.run.app', 'localhost', '127.0.0.1']
+default_allowed_hosts = ['.up.railway.app', '.run.app', 'localhost', '127.0.0.1']
 if os.getenv('RAILWAY_PUBLIC_DOMAIN'):
     default_allowed_hosts.append(os.getenv('RAILWAY_PUBLIC_DOMAIN'))
 if os.getenv('APP_DOMAIN'):
