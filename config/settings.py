@@ -106,7 +106,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'drf_spectacular',
-    'api',
+    'core.apps.CoreConfig',
     'ui',
 ]
 
@@ -170,7 +170,7 @@ JWT_EXPIRY = _parse_jwt_expiry(os.getenv('JWT_EXPIRES_IN', '1d'))
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'api.authentication.JWTAuthentication',
+        'core.authentication.JWTAuthentication',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'UNAUTHENTICATED_USER': None,

@@ -14,7 +14,7 @@ from django.urls import reverse
 from django.utils._os import safe_join
 from django.views.decorators.http import require_http_methods
 
-from api.models import (
+from core.models import (
     AppUser,
     Assignment,
     CurriculumQuestion,
