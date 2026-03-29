@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.contrib import messages
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
@@ -475,26 +475,34 @@ def teacher_add_student(request):
             photo_path = _save_profile_photo(profile_photo)
 
             hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            with transaction.atomic():
-                created_user = AppUser.objects.create(
-                    name=f'{first_name} {last_name}'.strip(),
-                    email=email,
-                    password=hashed_password,
-                    role='student',
+            try:
+                with transaction.atomic():
+                    created_user = AppUser.objects.create(
+                        name=f'{first_name} {last_name}'.strip(),
+                        email=email,
+                        password=hashed_password,
+                        role='student',
+                    )
+                    StudentProfile.objects.create(
+                        user=created_user,
+                        grade_id=int(grade_id) if grade_id else None,
+                        first_name=first_name,
+                        last_name=last_name,
+                        date_of_birth=date_of_birth or None,
+                        father_name=father_name,
+                        mother_name=mother_name,
+                        contact=contact,
+                        profile_photo=photo_path,
+                    )
+            except IntegrityError:
+                _delete_profile_photo(photo_path)
+                messages.error(
+                    request,
+                    'Student could not be created because the database is out of sync. Please redeploy and run migrations, then try again.',
                 )
-                StudentProfile.objects.create(
-                    user=created_user,
-                    grade_id=int(grade_id) if grade_id else None,
-                    first_name=first_name,
-                    last_name=last_name,
-                    date_of_birth=date_of_birth or None,
-                    father_name=father_name,
-                    mother_name=mother_name,
-                    contact=contact,
-                    profile_photo=photo_path,
-                )
-            messages.success(request, 'Student onboarded successfully.')
-            return redirect('ui-teacher-students')
+            else:
+                messages.success(request, 'Student onboarded successfully.')
+                return redirect('ui-teacher-students')
 
     return render(
         request,
