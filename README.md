@@ -41,6 +41,8 @@ Local defaults live in `.env`.
 
 Important values:
 
+- `DATABASE_URL`
+- `USE_LOCAL_DB`
 - `DB_HOST`
 - `DB_PORT`
 - `DB_USER`
@@ -51,6 +53,20 @@ Important values:
 
 ## Notes
 
+- `DATABASE_URL` is the hosted database setting and supports providers like Neon.
+- Set `USE_LOCAL_DB=true` to force the app to use the local `DB_*` values instead of `DATABASE_URL`.
 - The Django models map onto the existing PostgreSQL tables used by the old backend.
 - The frontend now defaults to `http://127.0.0.1:8000/api`.
 - The old Node backend is still present in `backend/` until you decide to remove it.
+
+## Cloud Run
+
+Set `DATABASE_URL` on the Cloud Run service so the container uses Neon for both `manage.py migrate` and the app process.
+
+Example:
+
+```bash
+gcloud run services update SERVICE_NAME \
+  --region=REGION \
+  --update-env-vars="DATABASE_URL=postgresql://neondb_owner:npg_BhaM8JbHok5I@ep-broad-dawn-am4h60kv-pooler.c-5.us-east-1.aws.neon.tech/abacus?sslmode=require&channel_binding=require"
+```

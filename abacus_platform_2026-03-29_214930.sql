@@ -16,22 +16,6 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
---
--- Name: public; Type: SCHEMA; Schema: -; Owner: prabhatshukla
---
-
-CREATE SCHEMA public;
-
-
-ALTER SCHEMA public OWNER TO prabhatshukla;
-
---
--- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: prabhatshukla
---
-
-COMMENT ON SCHEMA public IS 'standard public schema';
-
-
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -76,17 +60,17 @@ ALTER SEQUENCE public.assignments_id_seq OWNED BY public.assignments.id;
 
 
 --
--- Name: chapters; Type: TABLE; Schema: public; Owner: prabhatshukla
+-- Name: units; Type: TABLE; Schema: public; Owner: prabhatshukla
 --
 
-CREATE TABLE public.chapters (
+CREATE TABLE public.units (
     id integer NOT NULL,
     sub_lesson_id integer NOT NULL,
-    chapter_name character varying(120) NOT NULL
+    unit_name character varying(120) NOT NULL
 );
 
 
-ALTER TABLE public.chapters OWNER TO prabhatshukla;
+ALTER TABLE public.units OWNER TO prabhatshukla;
 
 --
 -- Name: chapters_id_seq; Type: SEQUENCE; Schema: public; Owner: prabhatshukla
@@ -107,7 +91,101 @@ ALTER TABLE public.chapters_id_seq OWNER TO prabhatshukla;
 -- Name: chapters_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: prabhatshukla
 --
 
-ALTER SEQUENCE public.chapters_id_seq OWNED BY public.chapters.id;
+ALTER SEQUENCE public.chapters_id_seq OWNED BY public.units.id;
+
+
+--
+-- Name: curriculum_question_attempts; Type: TABLE; Schema: public; Owner: prabhatshukla
+--
+
+CREATE TABLE public.curriculum_question_attempts (
+    id bigint NOT NULL,
+    unit_attempt_id bigint NOT NULL,
+    curriculum_question_id integer NOT NULL,
+    student_answer text NOT NULL,
+    is_correct boolean NOT NULL,
+    attempted_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.curriculum_question_attempts OWNER TO prabhatshukla;
+
+--
+-- Name: curriculum_question_attempts_id_seq; Type: SEQUENCE; Schema: public; Owner: prabhatshukla
+--
+
+CREATE SEQUENCE public.curriculum_question_attempts_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.curriculum_question_attempts_id_seq OWNER TO prabhatshukla;
+
+--
+-- Name: curriculum_question_attempts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: prabhatshukla
+--
+
+ALTER SEQUENCE public.curriculum_question_attempts_id_seq OWNED BY public.curriculum_question_attempts.id;
+
+
+--
+-- Name: curriculum_questions; Type: TABLE; Schema: public; Owner: prabhatshukla
+--
+
+CREATE TABLE public.curriculum_questions (
+    id integer NOT NULL,
+    question_text text NOT NULL,
+    unit_id integer,
+    answer_text text,
+    "order" integer
+);
+
+
+ALTER TABLE public.curriculum_questions OWNER TO prabhatshukla;
+
+--
+-- Name: curriculum_unit_attempts; Type: TABLE; Schema: public; Owner: prabhatshukla
+--
+
+CREATE TABLE public.curriculum_unit_attempts (
+    id bigint NOT NULL,
+    student_id integer NOT NULL,
+    unit_id integer NOT NULL,
+    status character varying(20) DEFAULT 'in_progress'::character varying NOT NULL,
+    elapsed_seconds integer DEFAULT 0 NOT NULL,
+    correct_count integer DEFAULT 0 NOT NULL,
+    wrong_count integer DEFAULT 0 NOT NULL,
+    completed_at timestamp without time zone,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    assignment_id integer
+);
+
+
+ALTER TABLE public.curriculum_unit_attempts OWNER TO prabhatshukla;
+
+--
+-- Name: curriculum_unit_attempts_id_seq; Type: SEQUENCE; Schema: public; Owner: prabhatshukla
+--
+
+CREATE SEQUENCE public.curriculum_unit_attempts_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.curriculum_unit_attempts_id_seq OWNER TO prabhatshukla;
+
+--
+-- Name: curriculum_unit_attempts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: prabhatshukla
+--
+
+ALTER SEQUENCE public.curriculum_unit_attempts_id_seq OWNED BY public.curriculum_unit_attempts.id;
 
 
 --
@@ -213,21 +291,6 @@ ALTER SEQUENCE public.grades_id_seq OWNED BY public.grades.id;
 
 
 --
--- Name: learnings; Type: TABLE; Schema: public; Owner: prabhatshukla
---
-
-CREATE TABLE public.learnings (
-    id integer NOT NULL,
-    unit_id integer,
-    learning_text text NOT NULL,
-    chapter_id integer,
-    answer_text text
-);
-
-
-ALTER TABLE public.learnings OWNER TO prabhatshukla;
-
---
 -- Name: learnings_id_seq; Type: SEQUENCE; Schema: public; Owner: prabhatshukla
 --
 
@@ -246,7 +309,7 @@ ALTER TABLE public.learnings_id_seq OWNER TO prabhatshukla;
 -- Name: learnings_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: prabhatshukla
 --
 
-ALTER SEQUENCE public.learnings_id_seq OWNED BY public.learnings.id;
+ALTER SEQUENCE public.learnings_id_seq OWNED BY public.curriculum_questions.id;
 
 
 --
@@ -292,7 +355,8 @@ CREATE TABLE public.questions (
     id integer NOT NULL,
     assignment_id integer NOT NULL,
     question_text text NOT NULL,
-    correct_answer character varying(120) NOT NULL
+    correct_answer character varying(120) NOT NULL,
+    "order" integer
 );
 
 
@@ -470,41 +534,6 @@ ALTER SEQUENCE public.sub_lessons_id_seq OWNED BY public.sub_lessons.id;
 
 
 --
--- Name: units; Type: TABLE; Schema: public; Owner: prabhatshukla
---
-
-CREATE TABLE public.units (
-    id integer NOT NULL,
-    chapter_id integer NOT NULL,
-    unit_name character varying(120) NOT NULL
-);
-
-
-ALTER TABLE public.units OWNER TO prabhatshukla;
-
---
--- Name: units_id_seq; Type: SEQUENCE; Schema: public; Owner: prabhatshukla
---
-
-CREATE SEQUENCE public.units_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE public.units_id_seq OWNER TO prabhatshukla;
-
---
--- Name: units_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: prabhatshukla
---
-
-ALTER SEQUENCE public.units_id_seq OWNED BY public.units.id;
-
-
---
 -- Name: users; Type: TABLE; Schema: public; Owner: prabhatshukla
 --
 
@@ -550,10 +579,24 @@ ALTER TABLE ONLY public.assignments ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- Name: chapters id; Type: DEFAULT; Schema: public; Owner: prabhatshukla
+-- Name: curriculum_question_attempts id; Type: DEFAULT; Schema: public; Owner: prabhatshukla
 --
 
-ALTER TABLE ONLY public.chapters ALTER COLUMN id SET DEFAULT nextval('public.chapters_id_seq'::regclass);
+ALTER TABLE ONLY public.curriculum_question_attempts ALTER COLUMN id SET DEFAULT nextval('public.curriculum_question_attempts_id_seq'::regclass);
+
+
+--
+-- Name: curriculum_questions id; Type: DEFAULT; Schema: public; Owner: prabhatshukla
+--
+
+ALTER TABLE ONLY public.curriculum_questions ALTER COLUMN id SET DEFAULT nextval('public.learnings_id_seq'::regclass);
+
+
+--
+-- Name: curriculum_unit_attempts id; Type: DEFAULT; Schema: public; Owner: prabhatshukla
+--
+
+ALTER TABLE ONLY public.curriculum_unit_attempts ALTER COLUMN id SET DEFAULT nextval('public.curriculum_unit_attempts_id_seq'::regclass);
 
 
 --
@@ -561,13 +604,6 @@ ALTER TABLE ONLY public.chapters ALTER COLUMN id SET DEFAULT nextval('public.cha
 --
 
 ALTER TABLE ONLY public.grades ALTER COLUMN id SET DEFAULT nextval('public.grades_id_seq'::regclass);
-
-
---
--- Name: learnings id; Type: DEFAULT; Schema: public; Owner: prabhatshukla
---
-
-ALTER TABLE ONLY public.learnings ALTER COLUMN id SET DEFAULT nextval('public.learnings_id_seq'::regclass);
 
 
 --
@@ -616,7 +652,7 @@ ALTER TABLE ONLY public.sub_lessons ALTER COLUMN id SET DEFAULT nextval('public.
 -- Name: units id; Type: DEFAULT; Schema: public; Owner: prabhatshukla
 --
 
-ALTER TABLE ONLY public.units ALTER COLUMN id SET DEFAULT nextval('public.units_id_seq'::regclass);
+ALTER TABLE ONLY public.units ALTER COLUMN id SET DEFAULT nextval('public.chapters_id_seq'::regclass);
 
 
 --
@@ -624,268 +660,6 @@ ALTER TABLE ONLY public.units ALTER COLUMN id SET DEFAULT nextval('public.units_
 --
 
 ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
-
-
---
--- Data for Name: assignments; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.assignments (id, teacher_id, student_id, lesson_id, assigned_date, assignment_kind, available_on) FROM stdin;
-7	2	4	13	2026-03-24 00:40:32.240708	homework	2026-03-24
-8	2	4	14	2026-03-24 00:40:32.240814	homework	2026-03-24
-9	2	4	13	2026-03-24 00:42:56.348504	classroom	2026-03-24
-10	2	4	14	2026-03-24 00:42:56.348593	classroom	2026-03-24
-\.
-
-
---
--- Data for Name: chapters; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.chapters (id, sub_lesson_id, chapter_name) FROM stdin;
-3	3	1
-4	3	2
-5	4	1
-7	5	1
-9	6	1
-10	7	1
-\.
-
-
---
--- Data for Name: django_content_type; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.django_content_type (id, app_label, model) FROM stdin;
-1	contenttypes	contenttype
-2	sessions	session
-\.
-
-
---
--- Data for Name: django_migrations; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.django_migrations (id, app, name, applied) FROM stdin;
-1	contenttypes	0001_initial	2026-03-22 21:36:48.201462+00
-2	contenttypes	0002_remove_content_type_name	2026-03-22 21:36:48.207687+00
-3	sessions	0001_initial	2026-03-22 22:18:34.486614+00
-\.
-
-
---
--- Data for Name: django_session; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.django_session (session_key, session_data, expire_date) FROM stdin;
-lds1pznvdi9u2ddd16lzvf28evqks4yd	eyJ1aV91c2VyX2lkIjoyfQ:1w55tZ:_M1lfTwYOmlYLeEWfVbkytIprl3ghInQfygyhUnG-IY	2026-04-07 18:50:25.221618+01
-\.
-
-
---
--- Data for Name: grades; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.grades (id, grade_name) FROM stdin;
-9	10
-10	9
-\.
-
-
---
--- Data for Name: learnings; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.learnings (id, unit_id, learning_text, chapter_id, answer_text) FROM stdin;
-4	\N	1+2+3	3	6
-5	\N	2+1+4	3	7
-6	\N	1+2	4	3
-7	\N	1+2	7	3
-\.
-
-
---
--- Data for Name: lesson_types; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.lesson_types (id, grade_id, lesson_name) FROM stdin;
-13	9	1
-14	9	2
-15	10	1
-\.
-
-
---
--- Data for Name: questions; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.questions (id, assignment_id, question_text, correct_answer) FROM stdin;
-\.
-
-
---
--- Data for Name: student_answers; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.student_answers (id, question_id, student_id, student_answer, is_correct) FROM stdin;
-\.
-
-
---
--- Data for Name: students; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.students (id, user_id, grade_id, first_name, last_name, father_name, mother_name, contact, profile_photo, date_of_birth) FROM stdin;
-3	4	\N	prabhat	shukla	fn	mn	0123456789	student_profiles/241abdc481054099aabf542290650800.png	\N
-2	3	\N	t1	t1	ft1	mt1	0123456789	student_profiles/fbaadbe8508949b5872efa28d94f1b28.png	\N
-\.
-
-
---
--- Data for Name: sub_lesson_type_master; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.sub_lesson_type_master (id, type_name) FROM stdin;
-1	Reading Abacus
-2	Listening Abacus
-3	Listening Anzan
-4	Flash Anzan
-5	Multiplication Abacus
-6	Multiplication Anzan
-7	Division Abacus
-8	Division Anzan
-\.
-
-
---
--- Data for Name: sub_lessons; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.sub_lessons (id, lesson_type_id, sub_lesson_name, sub_lesson_type_master_id) FROM stdin;
-3	13	Reading Abacus	1
-4	14	Reading Abacus	1
-5	14	Listening Abacus	2
-6	15	Reading Abacus	1
-7	15	Listening Abacus	2
-\.
-
-
---
--- Data for Name: units; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.units (id, chapter_id, unit_name) FROM stdin;
-\.
-
-
---
--- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: prabhatshukla
---
-
-COPY public.users (id, name, email, password, role) FROM stdin;
-2	ps	teacher@example.com	$2a$10$8RCjiqHSJalYY6vdapRrd.AJarvgzSJBYQCj1vBJGfIQ6luQNI2xC	teacher
-3	t1 t1	t1@gmail.com	$2b$12$DmgVx9KFUXoFIi1prcRwQOyyhKYLv7Q1.gCKcIUpge8e8HOJFm5Ru	student
-4	prabhat shukla	prabhat@gmail.com	$2b$12$MndrsJybMPhkQASQLFD3pu77JhJLuuGSDDkoKb8lSTPOgrYznBQXK	student
-5	Test	test@test.com	1234	teacher
-\.
-
-
---
--- Name: assignments_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.assignments_id_seq', 10, true);
-
-
---
--- Name: chapters_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.chapters_id_seq', 10, true);
-
-
---
--- Name: django_content_type_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.django_content_type_id_seq', 2, true);
-
-
---
--- Name: django_migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.django_migrations_id_seq', 3, true);
-
-
---
--- Name: grades_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.grades_id_seq', 10, true);
-
-
---
--- Name: learnings_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.learnings_id_seq', 7, true);
-
-
---
--- Name: lesson_types_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.lesson_types_id_seq', 15, true);
-
-
---
--- Name: questions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.questions_id_seq', 1, false);
-
-
---
--- Name: student_answers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.student_answers_id_seq', 1, false);
-
-
---
--- Name: students_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.students_id_seq', 3, true);
-
-
---
--- Name: sub_lesson_type_master_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.sub_lesson_type_master_id_seq', 8, true);
-
-
---
--- Name: sub_lessons_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.sub_lessons_id_seq', 7, true);
-
-
---
--- Name: units_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.units_id_seq', 2, true);
-
-
---
--- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: prabhatshukla
---
-
-SELECT pg_catalog.setval('public.users_id_seq', 5, true);
 
 
 --
@@ -897,11 +671,35 @@ ALTER TABLE ONLY public.assignments
 
 
 --
--- Name: chapters chapters_pkey; Type: CONSTRAINT; Schema: public; Owner: prabhatshukla
+-- Name: units chapters_pkey; Type: CONSTRAINT; Schema: public; Owner: prabhatshukla
 --
 
-ALTER TABLE ONLY public.chapters
+ALTER TABLE ONLY public.units
     ADD CONSTRAINT chapters_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: curriculum_question_attempts curriculum_question_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: prabhatshukla
+--
+
+ALTER TABLE ONLY public.curriculum_question_attempts
+    ADD CONSTRAINT curriculum_question_attempts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: curriculum_question_attempts curriculum_question_attempts_unit_attempt_id_curriculum_que_key; Type: CONSTRAINT; Schema: public; Owner: prabhatshukla
+--
+
+ALTER TABLE ONLY public.curriculum_question_attempts
+    ADD CONSTRAINT curriculum_question_attempts_unit_attempt_id_curriculum_que_key UNIQUE (unit_attempt_id, curriculum_question_id);
+
+
+--
+-- Name: curriculum_unit_attempts curriculum_unit_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: prabhatshukla
+--
+
+ALTER TABLE ONLY public.curriculum_unit_attempts
+    ADD CONSTRAINT curriculum_unit_attempts_pkey PRIMARY KEY (id);
 
 
 --
@@ -953,10 +751,10 @@ ALTER TABLE ONLY public.grades
 
 
 --
--- Name: learnings learnings_pkey; Type: CONSTRAINT; Schema: public; Owner: prabhatshukla
+-- Name: curriculum_questions learnings_pkey; Type: CONSTRAINT; Schema: public; Owner: prabhatshukla
 --
 
-ALTER TABLE ONLY public.learnings
+ALTER TABLE ONLY public.curriculum_questions
     ADD CONSTRAINT learnings_pkey PRIMARY KEY (id);
 
 
@@ -1033,14 +831,6 @@ ALTER TABLE ONLY public.sub_lessons
 
 
 --
--- Name: units units_pkey; Type: CONSTRAINT; Schema: public; Owner: prabhatshukla
---
-
-ALTER TABLE ONLY public.units
-    ADD CONSTRAINT units_pkey PRIMARY KEY (id);
-
-
---
 -- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: prabhatshukla
 --
 
@@ -1054,6 +844,13 @@ ALTER TABLE ONLY public.users
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: curriculum_unit_attempts_student_unit_assignment_uniq; Type: INDEX; Schema: public; Owner: prabhatshukla
+--
+
+CREATE UNIQUE INDEX curriculum_unit_attempts_student_unit_assignment_uniq ON public.curriculum_unit_attempts USING btree (student_id, unit_id, assignment_id);
 
 
 --
@@ -1085,20 +882,6 @@ CREATE INDEX idx_assignments_student ON public.assignments USING btree (student_
 
 
 --
--- Name: idx_chapters_sub_lesson; Type: INDEX; Schema: public; Owner: prabhatshukla
---
-
-CREATE INDEX idx_chapters_sub_lesson ON public.chapters USING btree (sub_lesson_id);
-
-
---
--- Name: idx_learnings_unit; Type: INDEX; Schema: public; Owner: prabhatshukla
---
-
-CREATE INDEX idx_learnings_unit ON public.learnings USING btree (unit_id);
-
-
---
 -- Name: idx_questions_assignment; Type: INDEX; Schema: public; Owner: prabhatshukla
 --
 
@@ -1113,10 +896,10 @@ CREATE INDEX idx_sub_lessons_lesson_type ON public.sub_lessons USING btree (less
 
 
 --
--- Name: idx_units_chapter; Type: INDEX; Schema: public; Owner: prabhatshukla
+-- Name: idx_units_sub_lesson; Type: INDEX; Schema: public; Owner: prabhatshukla
 --
 
-CREATE INDEX idx_units_chapter ON public.units USING btree (chapter_id);
+CREATE INDEX idx_units_sub_lesson ON public.units USING btree (sub_lesson_id);
 
 
 --
@@ -1144,27 +927,59 @@ ALTER TABLE ONLY public.assignments
 
 
 --
--- Name: chapters chapters_sub_lesson_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: prabhatshukla
+-- Name: units chapters_sub_lesson_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: prabhatshukla
 --
 
-ALTER TABLE ONLY public.chapters
+ALTER TABLE ONLY public.units
     ADD CONSTRAINT chapters_sub_lesson_id_fkey FOREIGN KEY (sub_lesson_id) REFERENCES public.sub_lessons(id) ON DELETE CASCADE;
 
 
 --
--- Name: learnings learnings_chapter_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: prabhatshukla
+-- Name: curriculum_question_attempts curriculum_question_attempts_curriculum_question_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: prabhatshukla
 --
 
-ALTER TABLE ONLY public.learnings
-    ADD CONSTRAINT learnings_chapter_id_fkey FOREIGN KEY (chapter_id) REFERENCES public.chapters(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.curriculum_question_attempts
+    ADD CONSTRAINT curriculum_question_attempts_curriculum_question_id_fkey FOREIGN KEY (curriculum_question_id) REFERENCES public.curriculum_questions(id) ON DELETE CASCADE;
 
 
 --
--- Name: learnings learnings_unit_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: prabhatshukla
+-- Name: curriculum_question_attempts curriculum_question_attempts_unit_attempt_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: prabhatshukla
 --
 
-ALTER TABLE ONLY public.learnings
-    ADD CONSTRAINT learnings_unit_id_fkey FOREIGN KEY (unit_id) REFERENCES public.units(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.curriculum_question_attempts
+    ADD CONSTRAINT curriculum_question_attempts_unit_attempt_id_fkey FOREIGN KEY (unit_attempt_id) REFERENCES public.curriculum_unit_attempts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: curriculum_unit_attempts curriculum_unit_attempts_assignment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: prabhatshukla
+--
+
+ALTER TABLE ONLY public.curriculum_unit_attempts
+    ADD CONSTRAINT curriculum_unit_attempts_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES public.assignments(id) ON DELETE CASCADE;
+
+
+--
+-- Name: curriculum_unit_attempts curriculum_unit_attempts_student_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: prabhatshukla
+--
+
+ALTER TABLE ONLY public.curriculum_unit_attempts
+    ADD CONSTRAINT curriculum_unit_attempts_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: curriculum_unit_attempts curriculum_unit_attempts_unit_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: prabhatshukla
+--
+
+ALTER TABLE ONLY public.curriculum_unit_attempts
+    ADD CONSTRAINT curriculum_unit_attempts_unit_id_fkey FOREIGN KEY (unit_id) REFERENCES public.units(id) ON DELETE CASCADE;
+
+
+--
+-- Name: curriculum_questions learnings_chapter_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: prabhatshukla
+--
+
+ALTER TABLE ONLY public.curriculum_questions
+    ADD CONSTRAINT learnings_chapter_id_fkey FOREIGN KEY (unit_id) REFERENCES public.units(id) ON DELETE CASCADE;
 
 
 --
@@ -1229,14 +1044,6 @@ ALTER TABLE ONLY public.sub_lessons
 
 ALTER TABLE ONLY public.sub_lessons
     ADD CONSTRAINT sub_lessons_sub_lesson_type_master_id_fkey FOREIGN KEY (sub_lesson_type_master_id) REFERENCES public.sub_lesson_type_master(id) ON DELETE SET NULL;
-
-
---
--- Name: units units_chapter_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: prabhatshukla
---
-
-ALTER TABLE ONLY public.units
-    ADD CONSTRAINT units_chapter_id_fkey FOREIGN KEY (chapter_id) REFERENCES public.chapters(id) ON DELETE CASCADE;
 
 
 --
