@@ -6,13 +6,38 @@ from urllib.parse import parse_qsl, unquote, urlparse
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 ENV_PATH = BASE_DIR / '.env'
-if ENV_PATH.exists():
-    for raw_line in ENV_PATH.read_text().splitlines():
+
+
+def _load_env_file(env_path: Path) -> None:
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text().splitlines():
         line = raw_line.strip()
         if not line or line.startswith('#') or '=' not in line:
             continue
         key, value = line.split('=', 1)
         os.environ.setdefault(key.strip(), value.strip())
+
+
+def _normalize_origin(value: str) -> str:
+    normalized = value.strip().rstrip('/')
+    if not normalized:
+        return ''
+    if normalized.startswith(('https://', 'http://')):
+        return normalized
+    return f'https://{normalized}'
+
+
+def _hostname_from_urlish(value: str) -> str:
+    normalized = _normalize_origin(value)
+    if not normalized:
+        return ''
+    parsed = urlparse(normalized)
+    return parsed.netloc
+
+
+_load_env_file(ENV_PATH)
 
 
 def _parse_jwt_expiry(raw_value: str) -> timedelta:
@@ -86,22 +111,14 @@ def _database_settings() -> dict:
 SECRET_KEY = os.getenv('JWT_SECRET', 'super_secret_change_me')
 DEBUG = _env_flag('DEBUG')
 
-default_csrf_trusted_origins = ['https://*.run.app']
-app_domain = os.getenv('APP_DOMAIN', '').strip().rstrip('/')
-app_url = os.getenv('APP_URL', '').strip().rstrip('/')
-if app_domain:
-    if app_domain.startswith('https://'):
-        default_csrf_trusted_origins.append(app_domain)
-    else:
-        default_csrf_trusted_origins.append(f'https://{app_domain}')
-if app_url.startswith('https://'):
-    default_csrf_trusted_origins.append(app_url)
-
+app_domain = _normalize_origin(os.getenv('APP_DOMAIN', ''))
+app_url = _normalize_origin(os.getenv('APP_URL', ''))
+default_csrf_trusted_origins = [value for value in [app_domain, app_url] if value.startswith('https://')]
 CSRF_TRUSTED_ORIGINS = _csv_env('CSRF_TRUSTED_ORIGINS', default_csrf_trusted_origins)
 
 default_allowed_hosts = ['.run.app', 'localhost', '127.0.0.1']
 if app_domain:
-    default_allowed_hosts.append(app_domain.removeprefix('https://').removeprefix('http://'))
+    default_allowed_hosts.append(_hostname_from_urlish(app_domain))
 
 ALLOWED_HOSTS = _csv_env('ALLOWED_HOSTS', default_allowed_hosts) or ['*']
 
@@ -150,19 +167,6 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {'default': _database_settings()}
-
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': os.environ.get('PGDATABASE'),
-#         'USER': os.environ.get('PGUSER'),
-#         'PASSWORD': os.environ.get('PGPASSWORD'),
-#         'HOST': os.environ.get('PGHOST'),
-#         'PORT': os.environ.get('PGPORT'),
-#         'OPTIONS': {
-#             'sslmode': 'require',
-#         },
-#     }}
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = os.getenv('TIME_ZONE', 'Europe/London')
 USE_I18N = True
