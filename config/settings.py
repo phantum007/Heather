@@ -30,8 +30,48 @@ def _parse_jwt_expiry(raw_value: str) -> timedelta:
     return timedelta(seconds=int(value))
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    return os.getenv(name, str(default)).lower() == 'true'
+
+
+def _csv_env(name: str, default_values: list[str]) -> list[str]:
+    raw_value = os.getenv(name, ','.join(default_values))
+    return [item.strip() for item in raw_value.split(',') if item.strip()]
+
+
+def _database_settings() -> dict:
+    use_local_db = _env_flag('USE_LOCAL_DB')
+
+    name = os.getenv('PGDATABASE') or os.getenv('DB_NAME', 'abacus_platform')
+    user = os.getenv('PGUSER') or os.getenv('DB_USER', 'postgres')
+    password = os.getenv('PGPASSWORD') or os.getenv('DB_PASSWORD', '')
+    host = os.getenv('RAILWAY_SERVICE_POSTGRES_URL') or os.getenv('PGHOST') or os.getenv('DB_HOST', 'localhost')
+    port = os.getenv('PGPORT') or os.getenv('DB_PORT', '5432')
+    options = {}
+
+    if use_local_db:
+        name = os.getenv('DB_NAME', 'abacus_platform')
+        user = os.getenv('DB_USER', 'postgres')
+        password = os.getenv('DB_PASSWORD', '')
+        host = os.getenv('DB_HOST', 'localhost')
+        port = os.getenv('DB_PORT', '5432')
+
+    if host != 'localhost':
+        options['sslmode'] = os.getenv('PGSSLMODE', 'require')
+
+    return {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': name,
+        'USER': user,
+        'PASSWORD': password,
+        'HOST': host,
+        'PORT': port,
+        'OPTIONS': options,
+    }
+
+
 SECRET_KEY = os.getenv('JWT_SECRET', 'super_secret_change_me')
-DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
+DEBUG = _env_flag('DEBUG')
 
 default_csrf_trusted_origins = ['https://*.railway.app', 'https://*.run.app']
 if os.getenv('RAILWAY_PUBLIC_DOMAIN'):
@@ -41,11 +81,7 @@ if os.getenv('APP_DOMAIN'):
 if os.getenv('APP_URL', '').startswith('https://'):
     default_csrf_trusted_origins.append(os.getenv('APP_URL'))
 
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', ','.join(default_csrf_trusted_origins)).split(',')
-    if origin.strip()
-]
+CSRF_TRUSTED_ORIGINS = _csv_env('CSRF_TRUSTED_ORIGINS', default_csrf_trusted_origins)
 
 default_allowed_hosts = ['*']
 if os.getenv('RAILWAY_PUBLIC_DOMAIN'):
@@ -53,11 +89,7 @@ if os.getenv('RAILWAY_PUBLIC_DOMAIN'):
 if os.getenv('APP_DOMAIN'):
     default_allowed_hosts.append(os.getenv('APP_DOMAIN'))
 
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv('ALLOWED_HOSTS', ','.join(default_allowed_hosts)).split(',')
-    if host.strip()
-] or ['*']
+ALLOWED_HOSTS = _csv_env('ALLOWED_HOSTS', default_allowed_hosts) or ['*']
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
@@ -103,30 +135,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME') or os.getenv('PGDATABASE') or 'abacus_platform',
-        'USER': os.getenv('DB_USER') or os.getenv('PGUSER') or 'postgres',
-        'PASSWORD': os.getenv('DB_PASSWORD') or os.getenv('PGPASSWORD') or '',
-        'HOST': os.getenv('DB_HOST') or os.getenv('PGHOST') or 'localhost',
-        'PORT': os.getenv('DB_PORT') or os.getenv('PGPORT') or '5432',
-    }
-}
-
-
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': os.environ.get('PGDATABASE'),
-#         'USER': os.environ.get('PGUSER'),
-#         'PASSWORD': os.environ.get('PGPASSWORD'),
-#         'HOST': os.environ.get('PGHOST'),
-#         'PORT': os.environ.get('PGPORT'),
-#         'OPTIONS': {
-#             'sslmode': 'require',
-#         },
-#     }}
+DATABASES = {'default': _database_settings()}
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = os.getenv('TIME_ZONE', 'Europe/London')
@@ -135,9 +144,6 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-# STATIC_URL = '/static/'
-# STATICFILES_DIRS = [str(BASE_DIR / 'static')]
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = str(BASE_DIR / 'media')
