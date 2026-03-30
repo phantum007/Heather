@@ -382,16 +382,17 @@ def teacher_edit_curriculum_item(request, item_type, item_id):
             value = request.POST.get('value', '').strip()
             answer = request.POST.get('answer', '').strip()
             order_value = request.POST.get('order', '').strip()
+            next_order = int(order_value) if order_value else None
             if not value or not answer:
                 messages.error(request, 'Question text and answer are required.')
             elif order_value and (not order_value.isdigit() or int(order_value) < 1):
                 messages.error(request, 'Order must be a positive number.')
-            elif _question_order_exists(item.unit_id, order_value, item=item):
+            elif next_order != item.order and _question_order_exists(item.unit_id, order_value, item=item):
                 messages.error(request, 'Order must be unique for the selected unit.')
             else:
                 item.question_text = value
                 item.answer_text = answer
-                item.order = int(order_value) if order_value else None
+                item.order = next_order
                 item.save(update_fields=['question_text', 'answer_text', 'order'])
                 messages.success(request, f'{label} updated successfully.')
                 return redirect('ui-teacher-curriculum')
