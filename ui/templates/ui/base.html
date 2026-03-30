@@ -224,6 +224,7 @@
     .practice-modal.is-open { display:flex; }
     .practice-modal-shell { width:min(1200px, 100%); height:min(860px, calc(100vh - 56px)); border-radius:32px; background:#ffffff; box-shadow:0 30px 80px rgba(15, 23, 42, 0.24); display:grid; grid-template-rows:auto minmax(0, 1fr); overflow:hidden; }
     .practice-modal-head { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:22px 24px; border-bottom:1px solid #e2e8f0; }
+    .practice-modal-head > div:first-child { min-width:0; }
     .practice-head-meta { display:flex; align-items:center; gap:12px; }
     .practice-timer { font-size:16px; font-weight:700; color:#64748b; }
     .practice-close { width:48px; height:48px; border-radius:16px; border:1px solid #cbd5e1; background:#fff; font-size:28px; line-height:1; cursor:pointer; color:#64748b; }
@@ -239,7 +240,13 @@
     .practice-stage { min-height:0; border:1px solid #e2e8f0; border-radius:28px; background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); padding:24px; display:grid; grid-template-rows:minmax(0, 1fr) auto auto; gap:18px; }
     .practice-stage-question { align-self:center; display:block; text-align:center; color:#4b5563; font-size:76px; line-height:1.12; font-weight:500; white-space:pre-line; overflow:auto; padding:12px; }
     .practice-stage-question.practice-stage-question-arithmetic { display:grid; place-items:center; white-space:normal; }
+    .practice-stage-question.practice-stage-question-multiline { display:grid; place-items:center; text-align:center; white-space:normal; align-self:center; padding:24px 32px; }
+    .practice-stage-question.practice-stage-question-multiline.practice-stage-question-multiline-dense { padding-top:18px; padding-bottom:18px; }
+    .practice-stage-question.practice-stage-question-multiline.practice-stage-question-multiline-very-dense { padding-top:14px; padding-bottom:14px; }
     .practice-arithmetic-stack { display:table; margin:0 auto; font-variant-numeric:tabular-nums; border-collapse:separate; border-spacing:0 14px; }
+    .practice-multiline-stack { display:inline-block; margin:0 auto; font-size:var(--practice-multiline-font-size, 44px); line-height:var(--practice-multiline-line-height, 1.08); font-weight:500; color:#4b5563; max-width:100%; font-variant-numeric:tabular-nums; text-align:center; }
+    .practice-stage-question.practice-stage-question-multiline.practice-stage-question-multiline-dense .practice-multiline-stack { line-height:var(--practice-multiline-line-height, 1.05); }
+    .practice-stage-question.practice-stage-question-multiline.practice-stage-question-multiline-very-dense .practice-multiline-stack { line-height:var(--practice-multiline-line-height, 1.02); }
     .practice-arithmetic-line { display:table-row; }
     .practice-arithmetic-operator { display:table-cell; width:48px; padding-right:18px; text-align:right; visibility:visible; }
     .practice-arithmetic-operator.is-blank { visibility:hidden; }
@@ -290,6 +297,7 @@
       .practice-modal { padding:12px; }
       .practice-modal-shell { width:100%; height:min(100vh - 24px, 100%); border-radius:24px; }
       .practice-modal-head { padding:16px; }
+      .practice-modal-title, #practice-modal-title, .practice-modal-head .sublesson-focus-title { font-size:24px; line-height:1.2; }
       .practice-modal-body { padding:16px; gap:16px; overflow:auto; grid-template-columns:1fr; grid-template-areas:'nav' 'stage'; }
       .practice-question-nav { grid-area:nav; display:flex; gap:10px; overflow-x:auto; overflow-y:hidden; padding:0 2px 6px; }
       .practice-question-nav button { min-width:140px; flex:0 0 auto; }
@@ -297,6 +305,8 @@
       .practice-stage { padding:16px; border-radius:22px; }
       .practice-stage-question { font-size:52px; }
       .practice-stage-question.practice-stage-question-arithmetic { font-size:44px; }
+      .practice-stage-question.practice-stage-question-multiline { padding:18px 22px; }
+      .practice-multiline-stack { font-size:min(var(--practice-multiline-font-size, 44px), 72px); }
       .practice-stage-question.practice-stage-question-flash { font-size:96px; }
       .practice-answer-box { border-radius:20px; }
       .practice-answer-icon { min-height:92px; font-size:44px; }
@@ -311,6 +321,9 @@
       .practice-modal { padding:8px; }
       .practice-modal-shell { height:calc(100vh - 16px); border-radius:20px; }
       .practice-modal-head { padding:14px; }
+      .practice-modal-head { align-items:flex-start; }
+      .practice-modal-title, #practice-modal-title, .practice-modal-head .sublesson-focus-title { font-size:18px; line-height:1.25; word-break:break-word; }
+      .practice-head-meta { flex-shrink:0; }
       .practice-timer { font-size:14px; }
       .practice-close { width:42px; height:42px; border-radius:14px; font-size:24px; }
       .practice-modal-body { padding:12px; gap:12px; }
@@ -320,6 +333,8 @@
       .practice-stage-question { font-size:40px; padding:6px; }
       .practice-stage-question.practice-stage-question-arithmetic { font-size:36px; }
       .practice-arithmetic-stack { border-spacing:0 10px; }
+      .practice-stage-question.practice-stage-question-multiline { padding:12px 14px; }
+      .practice-multiline-stack { font-size:min(var(--practice-multiline-font-size, 44px), 44px); }
       .practice-arithmetic-operator { width:34px; padding-right:12px; }
       .practice-answer-box { grid-template-columns:88px minmax(0, 1fr); border-radius:18px; }
       .practice-answer-icon { min-height:76px; font-size:36px; }

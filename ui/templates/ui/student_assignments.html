@@ -246,6 +246,24 @@
         return `${minutes}:${seconds}`;
       }
 
+      function fitMultilineQuestion(lines) {
+        if (!lines.length) {
+          return;
+        }
+        const longestLineLength = lines.reduce(
+          (maxValue, line) => Math.max(maxValue, String(line).length),
+          1
+        );
+        const availableWidth = Math.max(180, stageQuestion.clientWidth - 32);
+        const availableHeight = Math.max(140, stageQuestion.clientHeight - 32);
+        const heightLimitedFontSize = Math.floor(availableHeight / Math.max(lines.length, 1));
+        const widthLimitedFontSize = Math.floor(availableWidth / Math.max(longestLineLength * 0.62, 1));
+        const multilineFontSize = Math.max(18, Math.min(112, heightLimitedFontSize, widthLimitedFontSize));
+        const multilineLineHeight = lines.length >= 7 ? 1.02 : lines.length >= 5 ? 1.04 : 1.08;
+        stageQuestion.style.setProperty('--practice-multiline-font-size', `${multilineFontSize}px`);
+        stageQuestion.style.setProperty('--practice-multiline-line-height', String(multilineLineHeight));
+      }
+
       function loadUnitAttempts(unitId) {
         const entry = unitAttemptMap[String(unitId)] || unitAttemptMap[unitId] || {};
         const statuses = {};
@@ -442,7 +460,16 @@
         const question = activeQuestions[activeQuestionIndex];
         const hasRemainingQuestions = activeQuestions.some((item) => !questionStatuses[String(item.id)]);
         clearFlashSequence();
-        stageQuestion.classList.remove('practice-stage-question-listening', 'practice-stage-question-flash', 'practice-stage-question-arithmetic');
+        stageQuestion.style.removeProperty('--practice-multiline-font-size');
+        stageQuestion.style.removeProperty('--practice-multiline-line-height');
+        stageQuestion.classList.remove(
+          'practice-stage-question-listening',
+          'practice-stage-question-flash',
+          'practice-stage-question-arithmetic',
+          'practice-stage-question-multiline',
+          'practice-stage-question-multiline-dense',
+          'practice-stage-question-multiline-very-dense'
+        );
         if (!question) {
           stageQuestion.textContent = 'No questions found';
           answerInput.value = '';
@@ -504,6 +531,23 @@
             }).join('');
             stageQuestion.innerHTML = `<div class="practice-arithmetic-stack">${rows}</div>`;
             stageQuestion.classList.add('practice-stage-question-arithmetic');
+          } else if (arithmeticLines.length > 1) {
+            const escapedLines = arithmeticLines.map((line) => (
+              String(line)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+            ));
+            stageQuestion.innerHTML = `<div class="practice-multiline-stack">${escapedLines.join('<br>')}</div>`;
+            stageQuestion.classList.add('practice-stage-question-multiline');
+            if (arithmeticLines.length >= 8) {
+              stageQuestion.classList.add('practice-stage-question-multiline-very-dense');
+            } else if (arithmeticLines.length >= 5) {
+              stageQuestion.classList.add('practice-stage-question-multiline-dense');
+            }
+            window.requestAnimationFrame(function () {
+              fitMultilineQuestion(arithmeticLines);
+            });
           } else {
             stageQuestion.textContent = question.question_text;
           }
@@ -589,6 +633,25 @@
         clearFlashSequence();
         modal.classList.remove('is-open');
         modal.setAttribute('aria-hidden', 'true');
+      });
+
+      window.addEventListener('resize', function () {
+        if (!modal.classList.contains('is-open')) {
+          return;
+        }
+        const question = activeQuestions[activeQuestionIndex];
+        if (!question) {
+          return;
+        }
+        const arithmeticLines = String(question.question_text)
+          .split(/\n+/)
+          .map((part) => part.trim())
+          .filter(Boolean);
+        if (stageQuestion.classList.contains('practice-stage-question-multiline') && arithmeticLines.length > 1) {
+          window.requestAnimationFrame(function () {
+            fitMultilineQuestion(arithmeticLines);
+          });
+        }
       });
 
       modal.addEventListener('click', function (event) {
