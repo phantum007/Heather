@@ -6,10 +6,11 @@ from uuid import uuid4
 from django.conf import settings
 from django.contrib import messages
 from django.db import IntegrityError, transaction
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
 from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils._os import safe_join
 from django.views.decorators.http import require_http_methods
@@ -137,6 +138,30 @@ def _question_order_exists(unit_id, order_value, *, item=None):
     if item is not None:
         queryset = queryset.exclude(id=item.id)
     return queryset.exists()
+
+
+def _curriculum_grade_tree_queryset():
+    return Grade.objects.prefetch_related(
+        Prefetch(
+            'lesson_types',
+            queryset=LessonType.objects.order_by('grade_id', 'id').prefetch_related(
+                Prefetch(
+                    'sub_lessons',
+                    queryset=SubLesson.objects.order_by('lesson_type_id', 'id').prefetch_related(
+                        Prefetch(
+                            'units',
+                            queryset=Unit.objects.order_by('sub_lesson_id', 'id').prefetch_related(
+                                Prefetch(
+                                    'curriculum_questions',
+                                    queryset=CurriculumQuestion.objects.order_by('order', 'id'),
+                                )
+                            ),
+                        )
+                    ),
+                )
+            ),
+        )
+    )
 
 
 def _save_profile_photo(profile_photo):
@@ -324,9 +349,7 @@ def teacher_curriculum(request):
 
         return redirect(f"{reverse('ui-teacher-curriculum')}?tab={active_tab}")
 
-    grades = Grade.objects.prefetch_related(
-        'lesson_types__sub_lessons__units__curriculum_questions'
-    ).order_by('id')
+    grades = Grade.objects.order_by('id')
     lessons = LessonType.objects.select_related('grade').order_by('grade_id', 'id')
     sub_lessons = SubLesson.objects.select_related('lesson_type__grade').order_by('lesson_type_id', 'id')
     units = Unit.objects.select_related('sub_lesson__lesson_type__grade').order_by('sub_lesson_id', 'id')
@@ -345,6 +368,21 @@ def teacher_curriculum(request):
             'active_tab': active_tab,
         },
     )
+
+
+@require_http_methods(["GET"])
+def teacher_curriculum_grade_tree(request, grade_id):
+    user, response = _teacher_guard(request)
+    if response:
+        return response
+
+    grade = get_object_or_404(_curriculum_grade_tree_queryset(), id=grade_id)
+    html = render_to_string(
+        'ui/partials/teacher_curriculum_grade_tree.html',
+        {'grade': grade},
+        request=request,
+    )
+    return JsonResponse({'html': html})
 
 
 def teacher_students(request):
