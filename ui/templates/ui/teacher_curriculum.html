@@ -212,7 +212,7 @@
 
       <div class="curriculum-tree">
         {% for grade in grades %}
-          <details class="tree-grade tree-collapse">
+          <details class="tree-grade tree-collapse" data-grade-id="{{ grade.id }}" data-tree-url="{% url 'ui-teacher-curriculum-grade-tree' grade.id %}">
             <summary class="tree-node-shell">
               <div class="tree-node-main">
                 <span class="tree-collapse-icon" aria-hidden="true"></span>
@@ -226,90 +226,9 @@
                 </form>
               </div>
             </summary>
-
-            {% for lesson in grade.lesson_types.all %}
-              <details class="tree-branch tree-collapse">
-                <summary class="tree-node-shell">
-                  <div class="tree-node-main">
-                    <span class="tree-collapse-icon" aria-hidden="true"></span>
-                    <div class="tree-level tree-lesson-label">Lesson: {{ lesson.lesson_name }}</div>
-                  </div>
-                  <div class="tree-node-actions">
-                    <a href="{% url 'ui-teacher-edit-curriculum-item' 'lesson' lesson.id %}" class="tree-action-link">Edit</a>
-                    <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'lesson' lesson.id %}" onsubmit="return confirm('Delete this lesson and all nested items?');">
-                      {% csrf_token %}
-                      <button type="submit" class="tree-action-link danger">Delete</button>
-                    </form>
-                  </div>
-                </summary>
-
-                {% for sub_lesson in lesson.sub_lessons.all %}
-                  <details class="tree-branch tree-collapse">
-                    <summary class="tree-node-shell">
-                      <div class="tree-node-main">
-                        <span class="tree-collapse-icon" aria-hidden="true"></span>
-                        <div class="tree-level tree-sublesson-label">Track: {{ sub_lesson.sub_lesson_name }}</div>
-                      </div>
-                      <div class="tree-node-actions">
-                        <a href="{% url 'ui-teacher-edit-curriculum-item' 'track' sub_lesson.id %}" class="tree-action-link">Edit</a>
-                        <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'track' sub_lesson.id %}" onsubmit="return confirm('Delete this lesson track and all nested items?');">
-                          {% csrf_token %}
-                          <button type="submit" class="tree-action-link danger">Delete</button>
-                        </form>
-                      </div>
-                    </summary>
-
-                    {% for unit in sub_lesson.units.all %}
-                      <details class="tree-branch tree-collapse">
-                        <summary class="tree-node-shell">
-                          <div class="tree-node-main">
-                            <span class="tree-collapse-icon" aria-hidden="true"></span>
-                            <div class="tree-level tree-chapter-label">Unit: {{ unit.unit_name }}</div>
-                          </div>
-                          <div class="tree-node-actions">
-                            <a href="{% url 'ui-teacher-edit-curriculum-item' 'unit' unit.id %}" class="tree-action-link">Edit</a>
-                            <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'unit' unit.id %}" onsubmit="return confirm('Delete this unit and all nested items?');">
-                              {% csrf_token %}
-                              <button type="submit" class="tree-action-link danger">Delete</button>
-                            </form>
-                          </div>
-                        </summary>
-
-                        {% if unit.curriculum_questions.all %}
-                          <ul class="learning-list">
-                            {% for question in unit.curriculum_questions.all|dictsort:"order" %}
-                              <li>
-                                <div class="tree-node-shell">
-                                  <div>
-                                    <div>{% if question.order %}<strong>#{{ question.order }}</strong> {% endif %}{{ question.question_text }}</div>
-                                    <div class="stat-meta">Answer: {{ question.answer_text|default:'-' }}</div>
-                                  </div>
-                                  <div class="tree-node-actions">
-                                    <a href="{% url 'ui-teacher-edit-curriculum-item' 'question' question.id %}" class="tree-action-link">Edit</a>
-                                    <form method="post" action="{% url 'ui-teacher-delete-curriculum-item' 'question' question.id %}" onsubmit="return confirm('Delete this question?');">
-                                      {% csrf_token %}
-                                      <button type="submit" class="tree-action-link danger">Delete</button>
-                                    </form>
-                                  </div>
-                                </div>
-                              </li>
-                            {% endfor %}
-                          </ul>
-                        {% else %}
-                          <div class="tree-empty">No questions added yet.</div>
-                        {% endif %}
-                      </details>
-                    {% empty %}
-                      <div class="tree-empty">No units added yet.</div>
-                    {% endfor %}
-                  </details>
-                {% empty %}
-                  <div class="tree-empty">No lesson tracks selected yet.</div>
-                {% endfor %}
-              </details>
-            {% empty %}
-              <div class="tree-empty">No lessons added yet.</div>
-            {% endfor %}
+            <div class="tree-grade-content" data-tree-content>
+              <div class="tree-empty">Expand this grade to load its curriculum tree.</div>
+            </div>
           </details>
         {% empty %}
           <div class="empty-state">No curriculum has been created yet.</div>
@@ -426,6 +345,50 @@
 
     [chapterGradeFilter, chapterLessonFilter].forEach((element) => element && element.addEventListener('change', syncUnitForm));
     [learningGradeFilter, learningLessonFilter, learningSublessonFilter, learningUnitFilter].forEach((element) => element && element.addEventListener('change', syncQuestionForm));
+
+    const gradeTreeNodes = document.querySelectorAll('.tree-grade[data-tree-url]');
+
+    async function loadGradeTree(details) {
+      if (!details || details.dataset.loaded === 'true' || details.dataset.loading === 'true') {
+        return;
+      }
+
+      const content = details.querySelector('[data-tree-content]');
+      const url = details.dataset.treeUrl;
+      if (!content || !url) {
+        return;
+      }
+
+      details.dataset.loading = 'true';
+      content.innerHTML = '<div class="tree-empty">Loading curriculum tree...</div>';
+
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+        });
+        if (!response.ok) {
+          throw new Error('Request failed');
+        }
+        const payload = await response.json();
+        content.innerHTML = payload.html || '<div class="tree-empty">No lessons added yet.</div>';
+        details.dataset.loaded = 'true';
+      } catch (error) {
+        content.innerHTML = '<div class="tree-empty">Unable to load this grade right now.</div>';
+      } finally {
+        delete details.dataset.loading;
+      }
+    }
+
+    gradeTreeNodes.forEach((details) => {
+      details.addEventListener('toggle', () => {
+        if (details.open) {
+          loadGradeTree(details);
+        }
+      });
+    });
 
     syncUnitForm();
     syncQuestionForm();

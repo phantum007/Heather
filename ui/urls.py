@@ -13,6 +13,7 @@ urlpatterns = [
     path('teacher/students/<int:student_id>/edit/', views.teacher_edit_student, name='ui-teacher-edit-student'),
     path('teacher/students/<int:student_id>/delete/', views.teacher_delete_student, name='ui-teacher-delete-student'),
     path('teacher/curriculum/', views.teacher_curriculum, name='ui-teacher-curriculum'),
+    path('teacher/curriculum/grade/<int:grade_id>/tree/', views.teacher_curriculum_grade_tree, name='ui-teacher-curriculum-grade-tree'),
     path('teacher/curriculum/<str:item_type>/<int:item_id>/edit/', views.teacher_edit_curriculum_item, name='ui-teacher-edit-curriculum-item'),
     path('teacher/curriculum/<str:item_type>/<int:item_id>/delete/', views.teacher_delete_curriculum_item, name='ui-teacher-delete-curriculum-item'),
     path('teacher/profile/', views.teacher_profile, name='ui-teacher-profile'),
