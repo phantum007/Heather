@@ -1,0 +1,71 @@
+{
+  "scraped_at": "2026-04-01T21:13:27Z",
+  "source": "https://client.abacusmentalmath.com/",
+  "profile": {
+    "id": 982,
+    "class_room_id": 570,
+    "username": "speed",
+    "parent_id": 131,
+    "first_name": "speed",
+    "last_name": "speed",
+    "address": "12250 mason",
+    "grade": 10,
+    "owner_id": 5,
+    "gender": "Male",
+    "color": "green",
+    "role": "student",
+    "date_of_birth": "2000-12-23",
+    "coin_amount": 92,
+    "mode_type": "sprint",
+    "diamond_amount": 10,
+    "competition_life": 2,
+    "verify_token": null,
+    "is_verified": "2022-01-06T20:58:15.000000Z",
+    "is_banned": 0,
+    "is_selfpay": false,
+    "is_allow_login_from_another_country": 1,
+    "is_shuffled_questions": 0,
+    "avatar": null,
+    "vacation_mode_enabled_at": null,
+    "shop_show_at": "2026-01-19 12:36:50",
+    "added_to_class_at": "2022-01-07T02:57:16.000000Z",
+    "last_active_at": "2026-04-01T21:13:27.000000Z",
+    "guardians": [],
+    "created_at": "2022-01-06T20:57:16.000000Z",
+    "updated_at": "2026-04-01T21:13:27.000000Z",
+    "deleted_at": null,
+    "wins_daily": 0,
+    "wins_weekly": 0,
+    "wins_monthly": 0,
+    "wins_yearly": 0,
+    "diamond_rank": null,
+    "coin_period_ranks": {
+      "day": null,
+      "week": null,
+      "month": null,
+      "year": 248
+    }
+  },
+  "lesson_types": [
+    {
+      "type": "homework",
+      "count": 0,
+      "lessons": []
+    },
+    {
+      "type": "classroom",
+      "count": 0,
+      "lessons": []
+    },
+    {
+      "type": "word_problems",
+      "count": 0,
+      "lessons": []
+    },
+    {
+      "type": "final",
+      "count": 0,
+      "lessons": []
+    }
+  ]
+}

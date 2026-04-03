@@ -1,0 +1,19 @@
+{
+  "scraped_at": "2026-04-01T21:27:21.695Z",
+  "account": "speed",
+  "current_url": "https://client.abacusmentalmath.com/login",
+  "visible_lessons": [],
+  "captured_api": {
+    "login": {
+      "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5hYmFjdXNtZW50YWxtYXRoLmNvbS9sb2dpbiIsImlhdCI6MTc3NTA3ODg0MSwiZXhwIjoxNzc4Njc4ODQxLCJuYmYiOjE3NzUwNzg4NDEsImp0aSI6ImMxOGdDa3o0Q3h2NTVITUIiLCJzdWIiOiI5ODIiLCJwcnYiOiI5YzQyOWU2YTYwY2Q1Mjg1NDczZjJjOGJjNzAxZWMwOTQ4ZGY0ZDhjIn0.sA7XikooEO5-vK6sh5wDN9k1b9T-b704XXPqxRN5hkU",
+      "token_type": "Bearer",
+      "expires_in": 3600000
+    },
+    "profile": null,
+    "homeworkLessons": [],
+    "lessonTopics": [],
+    "topicUnits": [],
+    "unitQuestions": []
+  },
+  "lesson_walkthrough": []
+}
