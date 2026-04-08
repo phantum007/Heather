@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .answer_utils import answers_match
 from .models import Assignment, Grade, LessonType, Question, StudentAnswer, StudentProfile
 from .permissions import IsAuthenticatedUser, IsStudent, IsTeacher
 from .serializers import (
@@ -434,7 +435,7 @@ class SubmitAnswersView(APIView):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-                is_correct = str(answer['studentAnswer']).strip() == str(question.correct_answer).strip()
+                is_correct = answers_match(answer['studentAnswer'], question.correct_answer)
                 StudentAnswer.objects.update_or_create(
                     question=question,
                     student_id=request.user.id,
