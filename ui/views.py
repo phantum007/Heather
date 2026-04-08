@@ -15,6 +15,7 @@ from django.urls import reverse
 from django.utils._os import safe_join
 from django.views.decorators.http import require_http_methods
 
+from core.answer_utils import answers_match, truncate_numeric_precision
 from core.models import (
     AppUser,
     Assignment,
@@ -1346,8 +1347,10 @@ def student_submit_unit_question(request):
     question = get_object_or_404(CurriculumQuestion, id=question_id, unit_id=unit.id)
     if unit.sub_lesson.lesson_type_id != assignment.lesson_id:
         return JsonResponse({'message': 'This unit does not belong to the selected assignment.'}, status=400)
-    normalized_answer = (student_answer or '').strip()
-    is_correct = normalized_answer.lower() == (question.answer_text or '').strip().lower()
+    normalized_answer = truncate_numeric_precision(student_answer)
+    if not normalized_answer:
+        return JsonResponse({'message': 'student_answer is required.'}, status=400)
+    is_correct = answers_match(normalized_answer, question.answer_text)
 
     with transaction.atomic():
         attempt, created = CurriculumUnitAttempt.objects.get_or_create(

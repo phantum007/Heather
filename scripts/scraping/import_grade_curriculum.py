@@ -60,6 +60,45 @@ def main():
     sub_lesson_count = 0
     unit_count = 0
     question_count = 0
+    invalid_questions: list[dict[str, str | int | None]] = []
+
+    def _is_missing(value):
+        return value is None or (isinstance(value, str) and not value.strip())
+
+    for lesson_payload in payload["lessons"]:
+        lesson_name = lesson_payload["lesson_name"]
+        for sub_lesson_payload in lesson_payload["sub_lessons"]:
+            sub_lesson_name = sub_lesson_payload["sub_lesson_name"]
+            for unit_payload in sub_lesson_payload["units"]:
+                unit_name = unit_payload["unit_name"]
+                for question_payload in unit_payload["questions"]:
+                    if _is_missing(question_payload.get("question_text")) or _is_missing(question_payload.get("answer_text")):
+                        invalid_questions.append(
+                            {
+                                "lesson_name": lesson_name,
+                                "sub_lesson_name": sub_lesson_name,
+                                "unit_name": unit_name,
+                                "order": question_payload.get("order"),
+                                "question_text": question_payload.get("question_text"),
+                                "answer_text": question_payload.get("answer_text"),
+                            }
+                        )
+
+    if invalid_questions:
+        preview = "\n".join(
+            (
+                f"- lesson={item['lesson_name']!r} track={item['sub_lesson_name']!r} "
+                f"unit={item['unit_name']!r} order={item['order']!r} "
+                f"question_missing={_is_missing(item['question_text'])} "
+                f"answer_missing={_is_missing(item['answer_text'])}"
+            )
+            for item in invalid_questions[:10]
+        )
+        raise SystemExit(
+            "Aborting import because curriculum data contains incomplete questions.\n"
+            f"Found {len(invalid_questions)} invalid question(s) with missing question_text or answer_text.\n"
+            f"{preview}"
+        )
 
     with transaction.atomic():
         grade = Grade.objects.create(grade_name=grade_name)

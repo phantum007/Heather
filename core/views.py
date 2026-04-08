@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .answer_utils import answers_match, truncate_numeric_precision
 from .models import Assignment, Grade, LessonType, Question, StudentAnswer, StudentProfile
 from .permissions import IsAuthenticatedUser, IsStudent, IsTeacher
 from .serializers import (
@@ -434,12 +435,13 @@ class SubmitAnswersView(APIView):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-                is_correct = str(answer['studentAnswer']).strip() == str(question.correct_answer).strip()
+                student_answer = truncate_numeric_precision(answer['studentAnswer'])
+                is_correct = answers_match(student_answer, question.correct_answer)
                 StudentAnswer.objects.update_or_create(
                     question=question,
                     student_id=request.user.id,
                     defaults={
-                        'student_answer': str(answer['studentAnswer']),
+                        'student_answer': student_answer,
                         'is_correct': is_correct,
                     },
                 )
