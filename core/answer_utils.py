@@ -8,21 +8,33 @@ def _normalize_text_answer(value) -> str:
     return str(value or "").strip()
 
 
-def _normalize_numeric_answer(value) -> str | None:
+def truncate_numeric_precision(value) -> str:
     text = _normalize_text_answer(value)
     if not text:
-        return None
+        return ""
 
     candidate = text.replace(",", "")
     try:
         decimal_value = Decimal(candidate)
     except InvalidOperation:
-        return None
+        return text
 
     if decimal_value.as_tuple().exponent < -3:
         decimal_value = decimal_value.quantize(THREE_DECIMAL_PLACES, rounding=ROUND_DOWN)
 
-    normalized = format(decimal_value.normalize(), "f")
+    return format(decimal_value, "f")
+
+
+def _normalize_numeric_answer(value) -> str | None:
+    text = truncate_numeric_precision(value)
+    if not text:
+        return None
+
+    candidate = text.replace(",", "")
+    try:
+        normalized = format(Decimal(candidate).normalize(), "f")
+    except InvalidOperation:
+        return None
 
     if "." in normalized:
         normalized = normalized.rstrip("0").rstrip(".")

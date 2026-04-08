@@ -29,7 +29,9 @@
         <div>
           <h3>Lesson Detail</h3>
         </div>
-        <a href="{% url 'ui-student-assignments' %}?category={{ assignment_category }}" class="button ghost">Back to Lessons</a>
+        <div class="toolbar-actions">
+          <a href="{% url 'ui-student-assignments' %}?category={{ assignment_category }}" class="button ghost">Back to Lessons</a>
+        </div>
       </div>
 
       <div class="result-summary">
@@ -37,6 +39,35 @@
         <p class="student-lesson-title">Grade {{ selected_assignment.lesson.grade.grade_name }} | Lesson {{ selected_assignment.lesson.lesson_name }}</p>
         <p class="stat-meta">Teacher: {{ selected_assignment.teacher.name }}{% if selected_assignment.available_on %} • Available {{ selected_assignment.available_on|date:"d M Y" }}{% endif %}</p>
       </div>
+
+      <section class="speech-settings-card">
+        <div class="speech-settings-head">
+          <div>
+            <p class="stat-label" id="speech-settings-eyebrow">Speech Settings</p>
+            <h4 class="speech-settings-title" id="speech-settings-title">Choose how listening practice sounds</h4>
+          </div>
+          <button type="button" class="button ghost" id="practice-preview-voice">Preview Voice</button>
+        </div>
+
+        <div class="speech-settings-grid">
+          <label class="speech-setting-field" for="practice-language">
+            <span id="practice-language-label">Language</span>
+            <select id="practice-language" class="input">
+              <option value="en">English</option>
+              <option value="hi">Hindi</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+            </select>
+          </label>
+
+          <label class="speech-setting-field" for="practice-voice">
+            <span id="practice-voice-label">Voice</span>
+            <select id="practice-voice" class="input">
+              <option value="">Default voice</option>
+            </select>
+          </label>
+        </div>
+      </section>
 
       <div class="lesson-structure-grid">
         {% for track in lesson_tracks %}
@@ -88,8 +119,38 @@
           <p class="sublesson-focus-title" id="practice-modal-title">Unit</p>
         </div>
         <div class="practice-head-meta">
+          <button type="button" class="button ghost practice-speed-toggle" id="practice-speed-toggle">Speed</button>
           <span class="practice-timer" id="practice-timer">00:00</span>
           <button type="button" class="practice-close" id="practice-close" aria-label="Close practice">&times;</button>
+        </div>
+      </div>
+      <div class="practice-speed-panel" id="practice-speed-panel" hidden>
+        <div class="practice-speed-panel-backdrop" id="practice-speed-panel-backdrop"></div>
+        <div class="practice-speed-dialog" role="dialog" aria-modal="true" aria-labelledby="practice-speed-title">
+          <div class="practice-speed-dialog-head">
+            <div>
+              <p class="stat-label" id="practice-speed-eyebrow">Speech Control</p>
+              <h4 class="speech-settings-title" id="practice-speed-title">Adjust voice speed and line gap</h4>
+            </div>
+            <button type="button" class="practice-close practice-speed-close" id="practice-speed-close" aria-label="Close speed settings">&times;</button>
+          </div>
+          <div class="speech-settings-grid speech-settings-grid-sliders">
+            <label class="speech-setting-field" for="practice-voice-rate">
+              <span class="speech-setting-label-row">
+                <span id="practice-voice-rate-label">Voice Speed</span>
+                <strong id="practice-voice-rate-value">100%</strong>
+              </span>
+              <input id="practice-voice-rate" type="range" min="1" max="150" step="1" value="100">
+            </label>
+
+            <label class="speech-setting-field" for="practice-line-gap">
+              <span class="speech-setting-label-row">
+                <span id="practice-line-gap-label">Line Gap</span>
+                <strong id="practice-line-gap-value">1.6s</strong>
+              </span>
+              <input id="practice-line-gap" type="range" min="400" max="3000" step="100" value="1600">
+            </label>
+          </div>
         </div>
       </div>
 
@@ -101,7 +162,7 @@
 
           <div class="practice-answer-box">
             <div class="practice-answer-icon">+</div>
-            <input type="text" class="practice-answer-input" id="practice-answer-input" placeholder="Type here...">
+            <input type="text" class="practice-answer-input" id="practice-answer-input" inputmode="decimal" placeholder="Type here..." required>
           </div>
 
           <div class="practice-stage-actions">
@@ -190,6 +251,25 @@
       const title = document.getElementById('practice-modal-title');
       const nav = document.getElementById('practice-question-nav');
       const stageQuestion = document.getElementById('practice-stage-question');
+      const speechSettingsEyebrow = document.getElementById('speech-settings-eyebrow');
+      const speechSettingsTitle = document.getElementById('speech-settings-title');
+      const previewVoiceButton = document.getElementById('practice-preview-voice');
+      const speedToggleButton = document.getElementById('practice-speed-toggle');
+      const speedPanel = document.getElementById('practice-speed-panel');
+      const speedPanelBackdrop = document.getElementById('practice-speed-panel-backdrop');
+      const speedEyebrow = document.getElementById('practice-speed-eyebrow');
+      const speedTitle = document.getElementById('practice-speed-title');
+      const speedCloseButton = document.getElementById('practice-speed-close');
+      const languageLabel = document.getElementById('practice-language-label');
+      const languageSelect = document.getElementById('practice-language');
+      const voiceLabel = document.getElementById('practice-voice-label');
+      const voiceSelect = document.getElementById('practice-voice');
+      const voiceRateLabel = document.getElementById('practice-voice-rate-label');
+      const voiceRateSelect = document.getElementById('practice-voice-rate');
+      const voiceRateValue = document.getElementById('practice-voice-rate-value');
+      const lineGapLabel = document.getElementById('practice-line-gap-label');
+      const lineGapSelect = document.getElementById('practice-line-gap');
+      const lineGapValue = document.getElementById('practice-line-gap-value');
       const answerIcon = document.querySelector('.practice-answer-icon');
       const answerInput = document.getElementById('practice-answer-input');
       const feedback = document.getElementById('practice-feedback');
@@ -204,9 +284,256 @@
       const toListButton = document.getElementById('practice-to-list');
       const nextUnitButton = document.getElementById('practice-next-unit');
 
-      if (!modal || !title || !nav || !stageQuestion || !answerIcon || !answerInput || !feedback || !checkButton || !timer || !summary || !summaryTitle || !summaryCopy || !summaryScore || !summaryWrong || !summaryTime || !toListButton || !nextUnitButton) {
+      if (!modal || !title || !nav || !stageQuestion || !speechSettingsEyebrow || !speechSettingsTitle || !previewVoiceButton || !speedToggleButton || !speedPanel || !speedPanelBackdrop || !speedEyebrow || !speedTitle || !speedCloseButton || !languageLabel || !languageSelect || !voiceLabel || !voiceSelect || !voiceRateLabel || !voiceRateSelect || !voiceRateValue || !lineGapLabel || !lineGapSelect || !lineGapValue || !answerIcon || !answerInput || !feedback || !checkButton || !timer || !summary || !summaryTitle || !summaryCopy || !summaryScore || !summaryWrong || !summaryTime || !toListButton || !nextUnitButton) {
         return;
       }
+
+      const translations = {
+        en: {
+          voiceLang: 'en-GB',
+          speechSettingsEyebrow: 'Speech Settings',
+          speechSettingsTitle: 'Choose how listening practice sounds',
+          previewVoice: 'Preview Voice',
+          speedSettingsEyebrow: 'Speech Control',
+          speedSettingsTitle: 'Adjust voice speed and line gap',
+          speedButton: 'Speed',
+          languageLabel: 'Language',
+          voiceLabel: 'Voice',
+          voiceSpeedLabel: 'Voice Speed',
+          lineGapLabel: 'Line Gap',
+          defaultVoice: 'Default voice',
+          start: 'Start',
+          chooseUnitToBegin: 'Choose a unit to begin.',
+          selectedUnit: 'Selected: Unit {unitName}',
+          selectQuestion: 'Select a question',
+          typeHere: 'Type here...',
+          checkAnswer: 'Check Answer',
+          toList: 'To list',
+          nextUnit: 'Next unit',
+          noMoreUnits: 'No more units',
+          youPassed: 'You passed!',
+          youWillSucceedNextTime: "You'll succeed next time!",
+          niceWork: 'Nice work.',
+          tryAgain: 'Try again',
+          yourScore: 'Your score: {correctCount}/{totalCount}',
+          wrongAnswers: 'Wrong answers: {wrongCount}',
+          yourTime: 'Your time: {time}',
+          questionLabel: 'Question {number}',
+          correct: 'Correct',
+          incorrect: 'Incorrect',
+          readyToAnswer: 'Ready to answer',
+          noQuestionsFound: 'No questions found',
+          listenAndAnswer: 'Listen and Answer',
+          watchAndAnswer: 'Watch and Answer',
+          alreadyAnsweredCorrectly: 'Already answered correctly',
+          alreadyAnsweredIncorrectly: 'Already answered incorrectly',
+          correctAnswer: 'Correct answer',
+          incorrectAnswer: 'Incorrect answer',
+          answerRequired: 'Answer is required.',
+          unableToSave: 'Unable to save answer.',
+          previewSample: 'Listen and answer',
+          digitWords: {
+            '0': 'zero',
+            '1': 'one',
+            '2': 'two',
+            '3': 'three',
+            '4': 'four',
+            '5': 'five',
+            '6': 'six',
+            '7': 'seven',
+            '8': 'eight',
+            '9': 'nine',
+          },
+          operators: {
+            divide: 'divided by',
+            times: 'times',
+            minus: 'minus',
+          },
+        },
+        hi: {
+          voiceLang: 'hi-IN',
+          speechSettingsEyebrow: 'आवाज़ सेटिंग्स',
+          speechSettingsTitle: 'सुनने वाले अभ्यास की आवाज़ चुनें',
+          previewVoice: 'आवाज़ सुनें',
+          speedSettingsEyebrow: 'आवाज़ नियंत्रण',
+          speedSettingsTitle: 'आवाज़ की गति और लाइन अंतराल बदलें',
+          speedButton: 'गति',
+          languageLabel: 'भाषा',
+          voiceLabel: 'आवाज़',
+          voiceSpeedLabel: 'आवाज़ की गति',
+          lineGapLabel: 'लाइन अंतराल',
+          defaultVoice: 'डिफ़ॉल्ट आवाज़',
+          start: 'शुरू करें',
+          chooseUnitToBegin: 'शुरू करने के लिए एक यूनिट चुनें।',
+          selectedUnit: 'चयनित: यूनिट {unitName}',
+          selectQuestion: 'एक प्रश्न चुनें',
+          typeHere: 'यहाँ लिखें...',
+          checkAnswer: 'उत्तर जाँचें',
+          toList: 'सूची पर जाएँ',
+          nextUnit: 'अगली यूनिट',
+          noMoreUnits: 'और यूनिट नहीं हैं',
+          youPassed: 'आप पास हो गए!',
+          youWillSucceedNextTime: 'अगली बार आप ज़रूर सफल होंगे!',
+          niceWork: 'बहुत अच्छा।',
+          tryAgain: 'फिर कोशिश करें',
+          yourScore: 'आपका स्कोर: {correctCount}/{totalCount}',
+          wrongAnswers: 'गलत उत्तर: {wrongCount}',
+          yourTime: 'आपका समय: {time}',
+          questionLabel: 'प्रश्न {number}',
+          correct: 'सही',
+          incorrect: 'गलत',
+          readyToAnswer: 'उत्तर देने के लिए तैयार',
+          noQuestionsFound: 'कोई प्रश्न नहीं मिला',
+          listenAndAnswer: 'सुनकर उत्तर दें',
+          watchAndAnswer: 'देखकर उत्तर दें',
+          alreadyAnsweredCorrectly: 'यह प्रश्न पहले सही हल किया जा चुका है',
+          alreadyAnsweredIncorrectly: 'यह प्रश्न पहले गलत हल किया जा चुका है',
+          correctAnswer: 'सही उत्तर',
+          incorrectAnswer: 'गलत उत्तर',
+          answerRequired: 'उत्तर देना आवश्यक है।',
+          unableToSave: 'उत्तर सहेजा नहीं जा सका।',
+          previewSample: 'सुनकर उत्तर दें',
+          digitWords: {
+            '0': 'शून्य',
+            '1': 'एक',
+            '2': 'दो',
+            '3': 'तीन',
+            '4': 'चार',
+            '5': 'पाँच',
+            '6': 'छह',
+            '7': 'सात',
+            '8': 'आठ',
+            '9': 'नौ',
+          },
+          operators: {
+            divide: 'भाग',
+            times: 'गुणा',
+            minus: 'माइनस',
+          },
+        },
+        es: {
+          voiceLang: 'es-ES',
+          speechSettingsEyebrow: 'Configuracion de voz',
+          speechSettingsTitle: 'Elige como sonara la practica auditiva',
+          previewVoice: 'Probar voz',
+          speedSettingsEyebrow: 'Control de voz',
+          speedSettingsTitle: 'Ajusta la velocidad de la voz y la pausa',
+          speedButton: 'Velocidad',
+          languageLabel: 'Idioma',
+          voiceLabel: 'Voz',
+          voiceSpeedLabel: 'Velocidad',
+          lineGapLabel: 'Pausa entre líneas',
+          defaultVoice: 'Voz predeterminada',
+          start: 'Empezar',
+          chooseUnitToBegin: 'Elige una unidad para empezar.',
+          selectedUnit: 'Seleccionado: Unidad {unitName}',
+          selectQuestion: 'Selecciona una pregunta',
+          typeHere: 'Escribe aquí...',
+          checkAnswer: 'Comprobar respuesta',
+          toList: 'Volver a la lista',
+          nextUnit: 'Siguiente unidad',
+          noMoreUnits: 'No hay más unidades',
+          youPassed: '¡Has aprobado!',
+          youWillSucceedNextTime: 'La próxima vez lo conseguirás.',
+          niceWork: 'Buen trabajo.',
+          tryAgain: 'Inténtalo de nuevo',
+          yourScore: 'Tu puntuación: {correctCount}/{totalCount}',
+          wrongAnswers: 'Respuestas incorrectas: {wrongCount}',
+          yourTime: 'Tu tiempo: {time}',
+          questionLabel: 'Pregunta {number}',
+          correct: 'Correcto',
+          incorrect: 'Incorrecto',
+          readyToAnswer: 'Listo para responder',
+          noQuestionsFound: 'No se encontraron preguntas',
+          listenAndAnswer: 'Escucha y responde',
+          watchAndAnswer: 'Mira y responde',
+          alreadyAnsweredCorrectly: 'Ya respondido correctamente',
+          alreadyAnsweredIncorrectly: 'Ya respondido incorrectamente',
+          correctAnswer: 'Respuesta correcta',
+          incorrectAnswer: 'Respuesta incorrecta',
+          answerRequired: 'La respuesta es obligatoria.',
+          unableToSave: 'No se pudo guardar la respuesta.',
+          previewSample: 'Escucha y responde',
+          digitWords: {
+            '0': 'cero',
+            '1': 'uno',
+            '2': 'dos',
+            '3': 'tres',
+            '4': 'cuatro',
+            '5': 'cinco',
+            '6': 'seis',
+            '7': 'siete',
+            '8': 'ocho',
+            '9': 'nueve',
+          },
+          operators: {
+            divide: 'dividido por',
+            times: 'por',
+            minus: 'menos',
+          },
+        },
+        fr: {
+          voiceLang: 'fr-FR',
+          speechSettingsEyebrow: 'Parametres vocaux',
+          speechSettingsTitle: 'Choisissez le rendu vocal de l ecoute',
+          previewVoice: 'Tester la voix',
+          speedSettingsEyebrow: 'Controle vocal',
+          speedSettingsTitle: 'Ajustez la vitesse et la pause',
+          speedButton: 'Vitesse',
+          languageLabel: 'Langue',
+          voiceLabel: 'Voix',
+          voiceSpeedLabel: 'Vitesse',
+          lineGapLabel: 'Pause entre lignes',
+          defaultVoice: 'Voix par defaut',
+          start: 'Commencer',
+          chooseUnitToBegin: 'Choisissez une unité pour commencer.',
+          selectedUnit: 'Sélectionné : Unité {unitName}',
+          selectQuestion: 'Sélectionnez une question',
+          typeHere: 'Tapez ici...',
+          checkAnswer: 'Vérifier la réponse',
+          toList: 'Retour à la liste',
+          nextUnit: 'Unité suivante',
+          noMoreUnits: "Plus d'unités",
+          youPassed: 'Vous avez réussi !',
+          youWillSucceedNextTime: 'Vous réussirez la prochaine fois.',
+          niceWork: 'Bon travail.',
+          tryAgain: 'Réessayez',
+          yourScore: 'Votre score : {correctCount}/{totalCount}',
+          wrongAnswers: 'Réponses incorrectes : {wrongCount}',
+          yourTime: 'Votre temps : {time}',
+          questionLabel: 'Question {number}',
+          correct: 'Correct',
+          incorrect: 'Incorrect',
+          readyToAnswer: 'Prêt à répondre',
+          noQuestionsFound: 'Aucune question trouvée',
+          listenAndAnswer: 'Écoutez et répondez',
+          watchAndAnswer: 'Regardez et répondez',
+          alreadyAnsweredCorrectly: 'Déjà répondu correctement',
+          alreadyAnsweredIncorrectly: 'Déjà répondu incorrectement',
+          correctAnswer: 'Bonne réponse',
+          incorrectAnswer: 'Mauvaise réponse',
+          answerRequired: 'La reponse est obligatoire.',
+          unableToSave: "Impossible d'enregistrer la réponse.",
+          previewSample: 'Ecoutez et repondez',
+          digitWords: {
+            '0': 'zéro',
+            '1': 'un',
+            '2': 'deux',
+            '3': 'trois',
+            '4': 'quatre',
+            '5': 'cinq',
+            '6': 'six',
+            '7': 'sept',
+            '8': 'huit',
+            '9': 'neuf',
+          },
+          operators: {
+            divide: 'divisé par',
+            times: 'fois',
+            minus: 'moins',
+          },
+        },
+      };
 
       let activeQuestions = [];
       let activeQuestionIndex = 0;
@@ -214,6 +541,14 @@
       let questionStatuses = {};
       let activePracticeMode = 'default';
       let activeAudioMode = false;
+      let activeLanguage = window.localStorage.getItem('practiceLanguage') || 'en';
+      let activeVoiceName = window.localStorage.getItem('practiceVoiceName') || '';
+      let activeVoiceRate = window.localStorage.getItem('practiceVoiceRate') || '100';
+      let activeLineGap = window.localStorage.getItem('practiceLineGap') || '1600';
+      let availableVoices = [];
+      if (!translations[activeLanguage]) {
+        activeLanguage = 'en';
+      }
       const selectedAssignmentId = "{{ selected_assignment.id|default:'' }}";
       const unitAttemptMap = JSON.parse(document.getElementById('unit-attempt-map').textContent || '{}');
       const submitUrl = "{% url 'ui-student-unit-practice-submit' %}";
@@ -238,6 +573,119 @@
           .split('; ')
           .find((row) => row.startsWith(`${name}=`));
         return cookieValue ? decodeURIComponent(cookieValue.split('=')[1]) : '';
+      }
+
+      function getLocaleConfig() {
+        return translations[activeLanguage] || translations.en;
+      }
+
+      function t(key, replacements) {
+        const locale = getLocaleConfig();
+        let value = locale[key];
+        if (typeof value !== 'string') {
+          value = translations.en[key] || key;
+        }
+        return Object.entries(replacements || {}).reduce(
+          (result, [name, replacement]) => result.replace(`{${name}}`, String(replacement)),
+          value
+        );
+      }
+
+      function formatVoiceRateValue(value) {
+        return `${Math.round(Number(value || 100))}%`;
+      }
+
+      function formatLineGapValue(value) {
+        return `${(Number(value || 1600) / 1000).toFixed(1)}s`;
+      }
+
+      function getLanguagePrefix() {
+        const locale = getLocaleConfig();
+        return String(locale.voiceLang || translations.en.voiceLang).split('-')[0].toLowerCase();
+      }
+
+      function refreshVoiceOptions() {
+        const defaultLabel = t('defaultVoice');
+        const currentPrefix = getLanguagePrefix();
+        const matchingVoices = availableVoices.filter((voice) => (
+          String(voice.lang || '').toLowerCase().startsWith(currentPrefix)
+        ));
+        const selectedValue = activeVoiceName;
+        voiceSelect.innerHTML = '';
+
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = defaultLabel;
+        voiceSelect.appendChild(defaultOption);
+
+        matchingVoices.forEach((voice) => {
+          const option = document.createElement('option');
+          option.value = voice.name;
+          option.textContent = `${voice.name} (${voice.lang})`;
+          voiceSelect.appendChild(option);
+        });
+
+        const hasSelectedVoice = matchingVoices.some((voice) => voice.name === selectedValue);
+        voiceSelect.value = hasSelectedVoice ? selectedValue : '';
+        if (!hasSelectedVoice) {
+          activeVoiceName = '';
+          window.localStorage.removeItem('practiceVoiceName');
+        }
+      }
+
+      function loadVoices() {
+        if (!('speechSynthesis' in window)) {
+          return;
+        }
+        availableVoices = window.speechSynthesis.getVoices() || [];
+        refreshVoiceOptions();
+      }
+
+      function updateTrackSelectionLabels() {
+        document.querySelectorAll('.sublesson-focus-card').forEach((card) => {
+          const label = card.querySelector('.practice-track-selection-label');
+          const button = card.querySelector('.practice-track-start-button');
+          if (!label || !button) {
+            return;
+          }
+          if (card === getSelectedTrackCard()) {
+            const selectedButton = getSelectedUnitButton();
+            label.textContent = selectedButton
+              ? t('selectedUnit', {unitName: selectedButton.dataset.unitName})
+              : t('chooseUnitToBegin');
+            button.disabled = !selectedButton;
+          } else {
+            label.textContent = t('chooseUnitToBegin');
+            button.disabled = true;
+          }
+        });
+      }
+
+      function applyLanguage() {
+        languageSelect.value = activeLanguage;
+        speechSettingsEyebrow.textContent = t('speechSettingsEyebrow');
+        speechSettingsTitle.textContent = t('speechSettingsTitle');
+        previewVoiceButton.textContent = t('previewVoice');
+        speedEyebrow.textContent = t('speedSettingsEyebrow');
+        speedTitle.textContent = t('speedSettingsTitle');
+        speedToggleButton.textContent = t('speedButton');
+        languageLabel.textContent = t('languageLabel');
+        voiceLabel.textContent = t('voiceLabel');
+        voiceRateLabel.textContent = t('voiceSpeedLabel');
+        lineGapLabel.textContent = t('lineGapLabel');
+        voiceRateSelect.value = activeVoiceRate;
+        lineGapSelect.value = activeLineGap;
+        voiceRateValue.textContent = formatVoiceRateValue(activeVoiceRate);
+        lineGapValue.textContent = formatLineGapValue(activeLineGap);
+        refreshVoiceOptions();
+        stageQuestion.textContent = t('selectQuestion');
+        answerInput.placeholder = t('typeHere');
+        checkButton.textContent = t('checkAnswer');
+        toListButton.textContent = t('toList');
+        document.querySelectorAll('.practice-track-start-button').forEach((button) => {
+          button.textContent = t('start');
+        });
+        updateTrackSelectionLabels();
       }
 
       function formatTime(totalSeconds) {
@@ -332,26 +780,17 @@
         }
         stopSpeech();
         const currentSpeechToken = speechSequenceToken;
-        const digitWords = {
-          '0': 'zero',
-          '1': 'one',
-          '2': 'two',
-          '3': 'three',
-          '4': 'four',
-          '5': 'five',
-          '6': 'six',
-          '7': 'seven',
-          '8': 'eight',
-          '9': 'nine',
-        };
+        const locale = getLocaleConfig();
+        const digitWords = locale.digitWords || translations.en.digitWords;
+        const operators = locale.operators || translations.en.operators;
         const spokenLines = String(questionText)
           .split(/\n+/)
           .map((part) => part.trim())
           .filter(Boolean)
           .map((part) => part
-            .replace(/\s*\/\s*/g, ' divided by ')
-            .replace(/\s*x\s*/gi, ' times ')
-            .replace(/\s*-\s*/g, ' minus ')
+            .replace(/\s*\/\s*/g, ` ${operators.divide} `)
+            .replace(/\s*x\s*/gi, ` ${operators.times} `)
+            .replace(/\s*-\s*/g, ` ${operators.minus} `)
             .replace(/\d+/g, (digits) => digits.split('').map((digit) => digitWords[digit] || digit).join(', '))
             .replace(/\s{2,}/g, ' ')
             .trim()
@@ -363,7 +802,12 @@
             return;
           }
           const utterance = new SpeechSynthesisUtterance(spokenLines[index]);
-          utterance.rate = 0.55;
+          utterance.lang = locale.voiceLang || translations.en.voiceLang;
+          const selectedVoice = availableVoices.find((voice) => voice.name === activeVoiceName);
+          if (selectedVoice) {
+            utterance.voice = selectedVoice;
+          }
+          utterance.rate = Math.max(0.1, (Number(activeVoiceRate) || 100) / 100);
           utterance.pitch = 1;
           utterance.onend = function () {
             if (currentSpeechToken !== speechSequenceToken || index >= spokenLines.length - 1) {
@@ -371,7 +815,7 @@
             }
             window.setTimeout(function () {
               speakLine(index + 1);
-            }, 1600);
+            }, Number(activeLineGap) || 1600);
           };
           window.speechSynthesis.speak(utterance);
         };
@@ -390,18 +834,18 @@
         const passed = summaryState.passed;
         document.querySelector('.practice-stage').style.display = 'none';
         summary.classList.add('is-visible');
-        summaryTitle.textContent = passed ? "You passed!" : "You'll succeed next time!";
-        summaryCopy.textContent = passed ? 'Nice work.' : 'Try again';
-        summaryScore.textContent = `Your score: ${correctCount}/${activeQuestions.length}`;
-        summaryWrong.textContent = `Wrong answers: ${wrongCount}`;
-        summaryTime.textContent = `Your time: ${formatTime(timerElapsedSeconds)}`;
+        summaryTitle.textContent = passed ? t('youPassed') : t('youWillSucceedNextTime');
+        summaryCopy.textContent = passed ? t('niceWork') : t('tryAgain');
+        summaryScore.textContent = t('yourScore', {correctCount, totalCount: activeQuestions.length});
+        summaryWrong.textContent = t('wrongAnswers', {wrongCount});
+        summaryTime.textContent = t('yourTime', {time: formatTime(timerElapsedSeconds)});
 
         const remainingButton = Array.from(unitButtons).find((button) => {
           const card = button.closest('.practice-unit-card');
           return card && !card.classList.contains('practice-unit-card-complete') && button.dataset.unitId !== String(activeUnitId);
         });
         nextUnitButton.disabled = !remainingButton;
-        nextUnitButton.textContent = remainingButton ? 'Next unit' : 'No more units';
+        nextUnitButton.textContent = remainingButton ? t('nextUnit') : t('noMoreUnits');
         nextUnitButton.onclick = function () {
           if (!remainingButton) {
             return;
@@ -432,21 +876,7 @@
           const trigger = card.querySelector('.practice-unit-trigger');
           card.classList.toggle('practice-unit-card-active', trigger && trigger.dataset.unitId === unitId);
         });
-        document.querySelectorAll('.sublesson-focus-card').forEach((card) => {
-          const label = card.querySelector('.practice-track-selection-label');
-          const button = card.querySelector('.practice-track-start-button');
-          if (!label || !button) {
-            return;
-          }
-          if (card === getSelectedTrackCard()) {
-            const selectedButton = getSelectedUnitButton();
-            label.textContent = selectedButton ? `Selected: Unit ${selectedButton.dataset.unitName}` : 'Choose a unit to begin.';
-            button.disabled = !selectedButton;
-          } else {
-            label.textContent = 'Choose a unit to begin.';
-            button.disabled = true;
-          }
-        });
+        updateTrackSelectionLabels();
       }
 
       function updateUnitCompletionStates() {
@@ -474,7 +904,7 @@
           const button = document.createElement('button');
           const status = questionStatuses[String(question.id)] || 'unattempted';
           button.type = 'button';
-          button.innerHTML = `Question ${index + 1}<span class="practice-question-status">${status === 'correct' ? 'Correct' : status === 'incorrect' ? 'Incorrect' : 'Ready to answer'}</span>`;
+          button.innerHTML = `${t('questionLabel', {number: index + 1})}<span class="practice-question-status">${status === 'correct' ? t('correct') : status === 'incorrect' ? t('incorrect') : t('readyToAnswer')}</span>`;
           button.classList.toggle('is-unattempted', status === 'unattempted');
           button.classList.toggle('is-correct', status === 'correct');
           button.classList.toggle('is-incorrect', status === 'incorrect');
@@ -505,7 +935,7 @@
           'practice-stage-question-multiline-very-dense'
         );
         if (!question) {
-          stageQuestion.textContent = 'No questions found';
+          stageQuestion.textContent = t('noQuestionsFound');
           answerInput.value = '';
           answerInput.disabled = true;
           checkButton.disabled = true;
@@ -527,7 +957,7 @@
                 <rect x="38" y="58" width="7" height="39" rx="3.5" fill="#F8FAFC"></rect>
                 <rect x="85" y="58" width="7" height="39" rx="3.5" fill="#F8FAFC"></rect>
               </svg>
-              <p class="practice-flash-copy">Listen and Answer</p>
+              <p class="practice-flash-copy">${t('listenAndAnswer')}</p>
             </div>
           `;
           stageQuestion.classList.add('practice-stage-question-listening');
@@ -539,7 +969,7 @@
           stageQuestion.innerHTML = `
             <div class="practice-listening-shell">
               <div id="practice-flash-text"></div>
-              <p class="practice-flash-copy">Watch and Answer</p>
+              <p class="practice-flash-copy">${t('watchAndAnswer')}</p>
             </div>
           `;
           stageQuestion.classList.add('practice-stage-question-flash');
@@ -606,10 +1036,10 @@
         speakQuestion(question.question_text);
         const isLocked = Boolean(questionStatuses[String(question.id)]);
         answerInput.disabled = isLocked;
-        checkButton.disabled = isLocked || !hasRemainingQuestions;
         answerInput.value = '';
+        checkButton.disabled = isLocked || !hasRemainingQuestions || !String(answerInput.value || '').trim();
         if (isLocked) {
-          feedback.textContent = questionStatuses[String(question.id)] === 'correct' ? 'Already answered correctly' : 'Already answered incorrectly';
+          feedback.textContent = questionStatuses[String(question.id)] === 'correct' ? t('alreadyAnsweredCorrectly') : t('alreadyAnsweredIncorrectly');
           feedback.className = `practice-feedback ${questionStatuses[String(question.id)] === 'correct' ? 'correct' : 'incorrect'}`;
         } else {
           feedback.textContent = '';
@@ -620,6 +1050,98 @@
           button.classList.toggle('is-active', index === activeQuestionIndex);
         });
       }
+
+      function closeSpeedPanel() {
+        speedPanel.setAttribute('hidden', 'hidden');
+        speedToggleButton.classList.remove('is-open');
+      }
+
+      function openSpeedPanel() {
+        speedPanel.removeAttribute('hidden');
+        speedToggleButton.classList.add('is-open');
+      }
+
+      languageSelect.addEventListener('change', function () {
+        activeLanguage = translations[languageSelect.value] ? languageSelect.value : 'en';
+        window.localStorage.setItem('practiceLanguage', activeLanguage);
+        applyLanguage();
+        renderQuestionNav();
+        if (summary.classList.contains('is-visible')) {
+          const currentState = loadUnitAttempts(activeUnitId);
+          showSummaryScreen({
+            wrongCount: currentState.wrongCount,
+            correctCount: currentState.correctCount,
+            passed: currentState.status === 'passed',
+          });
+          return;
+        }
+        if (modal.classList.contains('is-open')) {
+          renderQuestion();
+        }
+      });
+
+      voiceSelect.addEventListener('change', function () {
+        activeVoiceName = voiceSelect.value || '';
+        if (activeVoiceName) {
+          window.localStorage.setItem('practiceVoiceName', activeVoiceName);
+        } else {
+          window.localStorage.removeItem('practiceVoiceName');
+        }
+      });
+
+      voiceRateSelect.addEventListener('input', function () {
+        activeVoiceRate = voiceRateSelect.value || '0.55';
+        voiceRateValue.textContent = formatVoiceRateValue(activeVoiceRate);
+        window.localStorage.setItem('practiceVoiceRate', activeVoiceRate);
+      });
+
+      voiceRateSelect.addEventListener('change', function () {
+        activeVoiceRate = voiceRateSelect.value || '0.55';
+        window.localStorage.setItem('practiceVoiceRate', activeVoiceRate);
+        if (modal.classList.contains('is-open')) {
+          renderQuestion();
+        }
+      });
+
+      lineGapSelect.addEventListener('input', function () {
+        activeLineGap = lineGapSelect.value || '1600';
+        lineGapValue.textContent = formatLineGapValue(activeLineGap);
+        window.localStorage.setItem('practiceLineGap', activeLineGap);
+      });
+
+      lineGapSelect.addEventListener('change', function () {
+        activeLineGap = lineGapSelect.value || '1600';
+        window.localStorage.setItem('practiceLineGap', activeLineGap);
+        if (modal.classList.contains('is-open')) {
+          renderQuestion();
+        }
+      });
+
+      previewVoiceButton.addEventListener('click', function () {
+        const locale = getLocaleConfig();
+        stopSpeech();
+        const utterance = new SpeechSynthesisUtterance(t('previewSample'));
+        utterance.lang = locale.voiceLang || translations.en.voiceLang;
+        const selectedVoice = availableVoices.find((voice) => voice.name === activeVoiceName);
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+        }
+        utterance.rate = Math.max(0.1, (Number(activeVoiceRate) || 100) / 100);
+        utterance.pitch = 1;
+        window.speechSynthesis.speak(utterance);
+      });
+
+      speedToggleButton.addEventListener('click', function () {
+        const isHidden = speedPanel.hasAttribute('hidden');
+        if (isHidden) {
+          openSpeedPanel();
+          return;
+        }
+        closeSpeedPanel();
+      });
+
+      speedCloseButton.addEventListener('click', closeSpeedPanel);
+      speedPanelBackdrop.addEventListener('click', closeSpeedPanel);
 
       function openUnit(unitId, unitPath, practiceMode, audioMode) {
         const payloadId = unitId;
@@ -682,6 +1204,7 @@
         stopTimer();
         stopSpeech();
         clearFlashSequence();
+        closeSpeedPanel();
         modal.classList.remove('is-open');
         modal.setAttribute('aria-hidden', 'true');
       });
@@ -710,8 +1233,40 @@
           stopTimer();
           stopSpeech();
           clearFlashSequence();
+          closeSpeedPanel();
           modal.classList.remove('is-open');
           modal.setAttribute('aria-hidden', 'true');
+        }
+      });
+
+      function truncateAnswerPrecision(rawValue) {
+        const value = String(rawValue || '').trim();
+        if (!value) {
+          return '';
+        }
+        const numericPattern = /^-?\d*(?:\.\d*)?$/;
+        if (!numericPattern.test(value)) {
+          return value;
+        }
+        const parts = value.split('.');
+        if (parts.length < 2) {
+          return value;
+        }
+        return `${parts[0]}.${parts[1].slice(0, 3)}`;
+      }
+
+      answerInput.addEventListener('input', function () {
+        const truncatedValue = truncateAnswerPrecision(answerInput.value);
+        if (truncatedValue !== answerInput.value) {
+          answerInput.value = truncatedValue;
+        }
+        const question = activeQuestions[activeQuestionIndex];
+        const hasRemainingQuestions = activeQuestions.some((item) => !questionStatuses[String(item.id)]);
+        const isLocked = Boolean(question && questionStatuses[String(question.id)]);
+        checkButton.disabled = isLocked || !hasRemainingQuestions || !String(answerInput.value || '').trim();
+        if (feedback.classList.contains('incorrect') && feedback.textContent === t('answerRequired')) {
+          feedback.textContent = '';
+          feedback.className = 'practice-feedback';
         }
       });
 
@@ -727,11 +1282,22 @@
         if (!question) {
           return;
         }
+        const normalizedAnswer = truncateAnswerPrecision(answerInput.value);
+        if (normalizedAnswer !== answerInput.value) {
+          answerInput.value = normalizedAnswer;
+        }
+        if (!normalizedAnswer) {
+          feedback.textContent = t('answerRequired');
+          feedback.className = 'practice-feedback incorrect';
+          answerInput.focus();
+          checkButton.disabled = true;
+          return;
+        }
         const formData = new URLSearchParams();
         formData.set('assignment_id', String(selectedAssignmentId));
         formData.set('unit_id', String(activeUnitId));
         formData.set('question_id', String(question.id));
-        formData.set('student_answer', answerInput.value || '');
+        formData.set('student_answer', normalizedAnswer);
         formData.set('elapsed_seconds', String(timerElapsedSeconds));
 
         fetch(submitUrl, {
@@ -745,12 +1311,12 @@
           .then((response) => response.json().then((data) => ({ok: response.ok, data})))
           .then(({ok, data}) => {
             if (!ok) {
-              feedback.textContent = data.message || 'Unable to save answer.';
+              feedback.textContent = data.message || t('unableToSave');
               feedback.className = 'practice-feedback incorrect';
               return;
             }
 
-            feedback.textContent = data.is_correct ? 'Correct answer' : 'Incorrect answer';
+            feedback.textContent = data.is_correct ? t('correctAnswer') : t('incorrectAnswer');
             feedback.className = `practice-feedback ${data.is_correct ? 'correct' : 'incorrect'}`;
             questionStatuses[String(question.id)] = data.status;
             unitAttemptMap[String(activeUnitId)] = {
@@ -762,7 +1328,7 @@
                 ...(unitAttemptMap[String(activeUnitId)]?.question_statuses || {}),
                 [String(question.id)]: {
                   status: data.status,
-                  student_answer: answerInput.value || '',
+                  student_answer: normalizedAnswer,
                 },
               },
             };
@@ -786,11 +1352,18 @@
             renderQuestion();
           })
           .catch(() => {
-            feedback.textContent = 'Unable to save answer.';
+            feedback.textContent = t('unableToSave');
             feedback.className = 'practice-feedback incorrect';
           });
       });
 
+      if ('speechSynthesis' in window) {
+        loadVoices();
+        if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
+          window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+      }
+      applyLanguage();
       updateUnitCompletionStates();
     })();
   </script>
