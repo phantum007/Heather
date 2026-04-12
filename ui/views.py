@@ -1328,6 +1328,38 @@ def student_assignments(request):
     )
     _populate_student_assignment_totals(assignments)
 
+    # Compute lesson-level locking for Standard / Lock mode assignments
+    assignment_ids = [a.id for a in assignments]
+    lesson_ids = [a.lesson_id for a in assignments]
+
+    unit_counts_by_lesson = dict(
+        Unit.objects.filter(sub_lesson__lesson_type_id__in=lesson_ids)
+        .values('sub_lesson__lesson_type_id')
+        .annotate(total=Count('id'))
+        .values_list('sub_lesson__lesson_type_id', 'total')
+    )
+    passed_units_by_assignment = dict(
+        CurriculumUnitAttempt.objects.filter(
+            student_id=user.id,
+            assignment_id__in=assignment_ids,
+            status=CurriculumUnitAttempt.STATUS_PASSED,
+        )
+        .values('assignment_id', 'unit_id').distinct()
+        .values('assignment_id')
+        .annotate(passed=Count('unit_id', distinct=True))
+        .values_list('assignment_id', 'passed')
+    )
+    complete_assignment_ids = {
+        a.id for a in assignments
+        if unit_counts_by_lesson.get(a.lesson_id, 0) > 0
+        and passed_units_by_assignment.get(a.id, 0) >= unit_counts_by_lesson.get(a.lesson_id, 0)
+    }
+    for i, assignment in enumerate(assignments):
+        if i == 0 or assignment.mode not in (Assignment.MODE_STANDARD, Assignment.MODE_LOCK):
+            assignment.is_locked = False
+        else:
+            assignment.is_locked = assignments[i - 1].id not in complete_assignment_ids
+
     selected_assignment = None
     lesson_tracks = []
     unit_attempt_map = {}

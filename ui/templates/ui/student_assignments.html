@@ -40,7 +40,7 @@
         <p class="stat-meta">Teacher: {{ selected_assignment.teacher.name }}{% if selected_assignment.available_on %} • Available {{ selected_assignment.available_on|date:"d M Y" }}{% endif %}</p>
       </div>
 
-      <section class="speech-settings-card">
+      <section class="speech-settings-card" style="display:none;">
         <div class="speech-settings-head">
           <div>
             <p class="stat-label" id="speech-settings-eyebrow">Speech Settings</p>
@@ -218,12 +218,20 @@
 
       <div class="lesson-card-grid">
         {% for assignment in assignments %}
-          <a href="{% url 'ui-student-assignments' %}?category={{ assignment_category }}&assignment_id={{ assignment.id }}" class="lesson-select-card">
+          {% if assignment.is_locked %}
+            <div class="lesson-select-card lesson-select-card-locked" title="Complete the previous lesson to unlock this one">
+          {% else %}
+            <a href="{% url 'ui-student-assignments' %}?category={{ assignment_category }}&assignment_id={{ assignment.id }}" class="lesson-select-card">
+          {% endif %}
             <div class="lesson-card-top">
               <div>
                 <p class="list-title">Grade {{ assignment.lesson.grade.grade_name }} | Lesson {{ assignment.lesson.lesson_name }}</p>
               </div>
-              <span class="badge">{% if assignment.is_submitted %}Submitted{% else %}Pending{% endif %}</span>
+              {% if assignment.is_locked %}
+                <span class="badge" style="background:#f1f5f9;color:#94a3b8;">🔒 Locked</span>
+              {% else %}
+                <span class="badge">{% if assignment.is_submitted %}Submitted{% else %}Pending{% endif %}</span>
+              {% endif %}
             </div>
 
             <p class="lesson-card-subtitle">Teacher: {{ assignment.teacher.name }}</p>
@@ -233,7 +241,11 @@
                 <span class="lesson-meta-pill">{{ assignment.available_on|date:"d M Y" }}</span>
               {% endif %}
             </div>
-          </a>
+          {% if assignment.is_locked %}
+            </div>
+          {% else %}
+            </a>
+          {% endif %}
         {% empty %}
           <div class="empty-state">No lessons are available in this section yet.</div>
         {% endfor %}
@@ -898,43 +910,29 @@
         });
       }
 
-      function updateUnitLockStates() {
-        if (assignmentMode !== 'standard' && assignmentMode !== 'lock') return;
-        const trackGroups = {};
-        unitButtons.forEach(function(button) {
-          const trackId = button.dataset.trackId;
-          if (!trackGroups[trackId]) trackGroups[trackId] = [];
-          trackGroups[trackId].push(button);
-        });
-        Object.values(trackGroups).forEach(function(buttons) {
-          buttons.forEach(function(button, index) {
-            const card = button.closest('.practice-unit-card');
-            if (!card) return;
-            if (index === 0) {
-              card.classList.remove('practice-unit-card-locked');
-              return;
-            }
-            const prevButton = buttons[index - 1];
-            const prevState = unitAttemptMap[String(prevButton.dataset.unitId)];
-            const prevPassed = prevState && prevState.status === 'passed';
-            card.classList.toggle('practice-unit-card-locked', !prevPassed);
-          });
-        });
-      }
 
       function renderQuestionNav() {
         nav.innerHTML = '';
 
+        // In lock mode, nothing after the first unanswered question is reachable
+        const firstUnansweredIndex = assignmentMode === 'lock'
+          ? activeQuestions.findIndex((item) => !questionStatuses[String(item.id)])
+          : -1;
+
         activeQuestions.forEach((question, index) => {
           const button = document.createElement('button');
           const status = questionStatuses[String(question.id)] || 'unattempted';
+          const isFutureLocked = assignmentMode === 'lock' && firstUnansweredIndex >= 0 && index > firstUnansweredIndex;
           button.type = 'button';
-          button.innerHTML = `${t('questionLabel', {number: index + 1})}<span class="practice-question-status">${status === 'correct' ? t('correct') : status === 'incorrect' ? t('incorrect') : t('readyToAnswer')}</span>`;
-          button.classList.toggle('is-unattempted', status === 'unattempted');
+          button.disabled = isFutureLocked;
+          button.innerHTML = `${t('questionLabel', {number: index + 1})}<span class="practice-question-status">${status === 'correct' ? t('correct') : status === 'incorrect' ? t('incorrect') : isFutureLocked ? '🔒' : t('readyToAnswer')}</span>`;
+          button.classList.toggle('is-unattempted', status === 'unattempted' && !isFutureLocked);
           button.classList.toggle('is-correct', status === 'correct');
           button.classList.toggle('is-incorrect', status === 'incorrect');
           button.classList.toggle('is-locked', status !== 'unattempted');
+          button.classList.toggle('is-future-locked', isFutureLocked);
           button.addEventListener('click', function () {
+            if (isFutureLocked) return;
             if (questionStatuses[String(question.id)] && index !== activeQuestionIndex) {
               return;
             }
@@ -1192,8 +1190,6 @@
 
       unitButtons.forEach((button) => {
         button.addEventListener('click', function () {
-          const card = button.closest('.practice-unit-card');
-          if (card && card.classList.contains('practice-unit-card-locked')) return;
           selectUnit(button.dataset.unitId);
         });
       });
@@ -1361,7 +1357,6 @@
               },
             };
             updateUnitCompletionStates();
-            updateUnitLockStates();
             renderQuestionNav();
 
             if (data.is_complete) {
@@ -1394,7 +1389,6 @@
       }
       applyLanguage();
       updateUnitCompletionStates();
-      updateUnitLockStates();
     })();
   </script>
 {% endif %}
