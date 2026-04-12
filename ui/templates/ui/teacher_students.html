@@ -44,12 +44,19 @@
           <p>Mother: {{ profile.mother_name|default:'-' }}</p>
         </div>
 
-        <div class="student-card-actions">
-          <a href="{% url 'ui-teacher-create-assignment' %}?student_id={{ profile.user.id }}{% if profile.grade_id %}&grade_id={{ profile.grade_id }}{% endif %}" class="button primary">Assign</a>
-          <a href="{% url 'ui-teacher-edit-student' profile.id %}" class="button secondary">Edit</a>
-          <form method="post" action="{% url 'ui-teacher-delete-student' profile.id %}" onsubmit="return confirm('Remove this student?');">
+        <div style="margin-top:14px; display:flex; align-items:center; gap:8px; padding:10px 14px; border-radius:14px; background:#fefce8; border:1px solid #fde68a;">
+          <span style="font-size:18px;">🪙</span>
+          <span style="font-size:13px; font-weight:800; color:#92400e;">{{ profile.coins }} coin{{ profile.coins|pluralize }}</span>
+        </div>
+
+        <div class="student-card-actions" style="flex-wrap:wrap;">
+          <a href="{% url 'ui-teacher-create-assignment' %}?student_id={{ profile.user.id }}{% if profile.grade_id %}&grade_id={{ profile.grade_id }}{% endif %}" class="button primary" style="flex:1; text-align:center;">Assign</a>
+          <a href="{% url 'ui-teacher-student-progress' profile.user.id %}" class="button secondary" style="flex:1; text-align:center;">Progress</a>
+          <a href="{% url 'ui-teacher-student-redemptions' profile.user.id %}" class="button secondary" style="flex:1; text-align:center;">🧸 Toys</a>
+          <a href="{% url 'ui-teacher-edit-student' profile.id %}" class="button secondary" style="flex:1; text-align:center;">Edit</a>
+          <form method="post" action="{% url 'ui-teacher-delete-student' profile.id %}" onsubmit="return confirm('Remove this student?');" style="flex:1;">
             {% csrf_token %}
-            <button type="submit" class="button danger">Remove</button>
+            <button type="submit" class="button danger" style="width:100%;">Remove</button>
           </form>
         </div>
       </article>

@@ -4,9 +4,10 @@ import re
 from uuid import uuid4
 
 from django.conf import settings
+from django.db.models import F
 from django.contrib import messages
 from django.db import IntegrityError, transaction
-from django.db.models import Exists, OuterRef, Prefetch, Q
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
 from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -29,6 +30,8 @@ from core.models import (
     StudentProfile,
     SubLesson,
     SubLessonTypeMaster,
+    Toy,
+    ToyRedemption,
     Unit,
 )
 
@@ -703,6 +706,9 @@ def teacher_create_assignment(request):
     selected_grade_id = source.get('grade_id', '').strip()
     selected_lesson_ids = [value.strip() for value in source.getlist('lesson_ids') if value.strip()]
     assignment_kind = source.get('assignment_kind', Assignment.KIND_HOMEWORK).strip() or Assignment.KIND_HOMEWORK
+    assignment_mode = source.get('assignment_mode', Assignment.MODE_SPRINT).strip()
+    if assignment_mode not in {Assignment.MODE_SPRINT, Assignment.MODE_STANDARD, Assignment.MODE_LOCK}:
+        assignment_mode = Assignment.MODE_SPRINT
     today_value = timezone.localdate().isoformat()
     available_on = source.get('available_on', '').strip() or today_value
     selected_student = next((profile for profile in students if str(profile.user_id) == str(selected_student_id)), None)
@@ -786,6 +792,7 @@ def teacher_create_assignment(request):
                             assigned_date=timezone.now(),
                             assignment_kind=assignment_kind,
                             available_on=available_on or None,
+                            mode=assignment_mode,
                         )
                     )
                 Assignment.objects.bulk_create(assignments_to_create)
@@ -892,6 +899,7 @@ def teacher_create_assignment(request):
             'selected_grade_id': str(selected_grade_id),
             'selected_lesson_ids': selected_lesson_ids,
             'assignment_kind': assignment_kind,
+            'assignment_mode': assignment_mode,
             'available_on': available_on,
             'today_value': today_value,
             'selected_student': selected_student,
@@ -1096,10 +1104,13 @@ def _serialize_unit_attempts(student_id, assignment_id, lesson_tracks):
         CurriculumUnitAttempt.objects
         .filter(student_id=student_id, assignment_id=assignment_id, unit_id__in=unit_ids)
         .prefetch_related('question_attempts')
+        .order_by('unit_id', '-attempt_number')
     )
 
     attempt_map = {}
     for attempt in attempts:
+        if attempt.unit_id in attempt_map:
+            continue  # already stored the latest for this unit
         question_statuses = {
             item.curriculum_question_id: {
                 'status': 'correct' if item.is_correct else 'incorrect',
@@ -1113,6 +1124,7 @@ def _serialize_unit_attempts(student_id, assignment_id, lesson_tracks):
             'correct_count': attempt.correct_count,
             'wrong_count': attempt.wrong_count,
             'completed_at': attempt.completed_at.isoformat() if attempt.completed_at else None,
+            'attempt_number': attempt.attempt_number,
             'question_statuses': question_statuses,
         }
     return attempt_map
@@ -1157,6 +1169,36 @@ def student_dashboard(request):
             'homework_count': len(homework_assignments),
             'classroom_count': len(classroom_assignments),
             'dashboard_grade_name': dashboard_grade_name,
+        },
+    )
+
+
+@require_http_methods(['GET'])
+def student_coins(request):
+    user, response = _student_guard(request)
+    if response:
+        return response
+
+    profile = StudentProfile.objects.select_related('grade').filter(user_id=user.id).first()
+    coins = profile.coins if profile else 0
+    toys = Toy.objects.order_by('coin_value', 'name')
+    redemptions = (
+        ToyRedemption.objects
+        .filter(student_id=user.id)
+        .select_related('toy')
+        .order_by('-redeemed_at')
+    )
+
+    return render(
+        request,
+        'ui/student_coins.html',
+        {
+            'current_user': user,
+            'student_profile': profile,
+            'coins': coins,
+            'coin_value': settings.PASSING_UNIT_COIN,
+            'toys': toys,
+            'redemptions': redemptions,
         },
     )
 
@@ -1353,38 +1395,41 @@ def student_submit_unit_question(request):
     is_correct = answers_match(normalized_answer, question.answer_text)
 
     with transaction.atomic():
-        attempt, created = CurriculumUnitAttempt.objects.get_or_create(
-            student_id=user.id,
-            unit_id=unit.id,
-            assignment_id=assignment.id,
-            defaults={
-                'status': CurriculumUnitAttempt.STATUS_IN_PROGRESS,
-                'elapsed_seconds': int(elapsed_seconds or '0'),
-                'correct_count': 0,
-                'wrong_count': 0,
-                'created_at': timezone.now(),
-                'updated_at': timezone.now(),
-            },
+        latest_attempt = (
+            CurriculumUnitAttempt.objects
+            .filter(student_id=user.id, unit_id=unit.id, assignment_id=assignment.id)
+            .order_by('-attempt_number')
+            .first()
         )
-        if not created:
-            if attempt.status == CurriculumUnitAttempt.STATUS_FAILED:
-                attempt.question_attempts.all().delete()
-                attempt.status = CurriculumUnitAttempt.STATUS_IN_PROGRESS
-                attempt.elapsed_seconds = int(elapsed_seconds or '0')
-                attempt.correct_count = 0
-                attempt.wrong_count = 0
-                attempt.completed_at = None
-                attempt.updated_at = timezone.now()
-                attempt.save(
-                    update_fields=[
-                        'status',
-                        'elapsed_seconds',
-                        'correct_count',
-                        'wrong_count',
-                        'completed_at',
-                        'updated_at',
-                    ]
-                )
+
+        if latest_attempt is None:
+            attempt = CurriculumUnitAttempt.objects.create(
+                student_id=user.id,
+                unit_id=unit.id,
+                assignment_id=assignment.id,
+                attempt_number=1,
+                status=CurriculumUnitAttempt.STATUS_IN_PROGRESS,
+                elapsed_seconds=int(elapsed_seconds or '0'),
+                correct_count=0,
+                wrong_count=0,
+                created_at=timezone.now(),
+                updated_at=timezone.now(),
+            )
+        elif latest_attempt.status in (CurriculumUnitAttempt.STATUS_PASSED, CurriculumUnitAttempt.STATUS_FAILED):
+            attempt = CurriculumUnitAttempt.objects.create(
+                student_id=user.id,
+                unit_id=unit.id,
+                assignment_id=assignment.id,
+                attempt_number=latest_attempt.attempt_number + 1,
+                status=CurriculumUnitAttempt.STATUS_IN_PROGRESS,
+                elapsed_seconds=int(elapsed_seconds or '0'),
+                correct_count=0,
+                wrong_count=0,
+                created_at=timezone.now(),
+                updated_at=timezone.now(),
+            )
+        else:
+            attempt = latest_attempt
             attempt.elapsed_seconds = int(elapsed_seconds or attempt.elapsed_seconds or 0)
             attempt.updated_at = timezone.now()
             attempt.save(update_fields=['elapsed_seconds', 'updated_at'])
@@ -1410,6 +1455,7 @@ def student_submit_unit_question(request):
         attempt.correct_count = correct_count
         attempt.wrong_count = wrong_count
         attempt.elapsed_seconds = int(elapsed_seconds or attempt.elapsed_seconds or 0)
+        coins_awarded = 0
         if is_complete:
             attempt.status = (
                 CurriculumUnitAttempt.STATUS_PASSED
@@ -1417,6 +1463,10 @@ def student_submit_unit_question(request):
                 else CurriculumUnitAttempt.STATUS_FAILED
             )
             attempt.completed_at = timezone.now()
+            if attempt.status == CurriculumUnitAttempt.STATUS_PASSED:
+                coin_value = settings.PASSING_UNIT_COIN
+                coins_awarded = coin_value * 2 if attempt.attempt_number == 1 else coin_value
+                StudentProfile.objects.filter(user_id=user.id).update(coins=F('coins') + coins_awarded)
         else:
             attempt.status = CurriculumUnitAttempt.STATUS_IN_PROGRESS
             attempt.completed_at = None
@@ -1433,6 +1483,313 @@ def student_submit_unit_question(request):
             'elapsed_seconds': attempt.elapsed_seconds,
             'is_complete': is_complete,
             'attempt_status': attempt.status,
+            'attempt_number': attempt.attempt_number,
+            'coins_awarded': coins_awarded,
             'pass': attempt.status == CurriculumUnitAttempt.STATUS_PASSED,
         }
     )
+
+
+@require_http_methods(['GET'])
+def teacher_student_unit_attempts(request, student_id, unit_id):
+    user, response = _teacher_guard(request)
+    if response:
+        return response
+
+    assignment_id = request.GET.get('assignment_id', '').strip()
+    if not assignment_id:
+        return JsonResponse({'message': 'assignment_id is required.'}, status=400)
+
+    assignment = get_object_or_404(Assignment, id=assignment_id, teacher_id=user.id, student_id=student_id)
+    unit = get_object_or_404(Unit, id=unit_id)
+
+    attempts = (
+        CurriculumUnitAttempt.objects
+        .filter(student_id=student_id, unit_id=unit_id, assignment_id=assignment.id)
+        .prefetch_related(
+            Prefetch(
+                'question_attempts',
+                queryset=CurriculumQuestionAttempt.objects.select_related('curriculum_question').order_by('attempted_at'),
+            )
+        )
+        .order_by('attempt_number')
+    )
+
+    data = []
+    for attempt in attempts:
+        questions = [
+            {
+                'question_id': qa.curriculum_question_id,
+                'question_text': qa.curriculum_question.question_text,
+                'correct_answer': qa.curriculum_question.answer_text,
+                'student_answer': qa.student_answer,
+                'is_correct': qa.is_correct,
+                'attempted_at': qa.attempted_at.isoformat(),
+            }
+            for qa in attempt.question_attempts.all()
+        ]
+        data.append({
+            'attempt_number': attempt.attempt_number,
+            'status': attempt.status,
+            'correct_count': attempt.correct_count,
+            'wrong_count': attempt.wrong_count,
+            'elapsed_seconds': attempt.elapsed_seconds,
+            'completed_at': attempt.completed_at.isoformat() if attempt.completed_at else None,
+            'created_at': attempt.created_at.isoformat(),
+            'questions': questions,
+        })
+
+    return JsonResponse({
+        'unit_id': unit.id,
+        'unit_name': unit.unit_name,
+        'student_id': student_id,
+        'assignment_id': assignment.id,
+        'attempts': data,
+    })
+
+
+@require_http_methods(['POST'])
+def teacher_reset_student_unit(request, student_id, unit_id):
+    user, response = _teacher_guard(request)
+    if response:
+        return response
+
+    assignment_id = request.POST.get('assignment_id', '').strip()
+    if not assignment_id:
+        return JsonResponse({'message': 'assignment_id is required.'}, status=400)
+
+    assignment = get_object_or_404(Assignment, id=assignment_id, teacher_id=user.id, student_id=student_id)
+    get_object_or_404(Unit, id=unit_id)
+
+    deleted_count, _ = CurriculumUnitAttempt.objects.filter(
+        student_id=student_id,
+        unit_id=unit_id,
+        assignment_id=assignment.id,
+    ).delete()
+
+    return JsonResponse({
+        'message': f'Unit progress reset. {deleted_count} attempt(s) cleared.',
+        'deleted': deleted_count,
+    })
+
+
+@require_http_methods(['GET'])
+def teacher_student_progress(request, student_id):
+    user, response = _teacher_guard(request)
+    if response:
+        return response
+
+    profile = get_object_or_404(
+        StudentProfile.objects.select_related('user', 'grade'),
+        user_id=student_id,
+    )
+
+    selected_assignment_id = request.GET.get('assignment_id', '').strip()
+    selected_track_id = request.GET.get('track_id', '').strip()
+
+    assignments = list(
+        Assignment.objects.filter(student_id=student_id)
+        .select_related('lesson__grade')
+        .prefetch_related('lesson__sub_lessons__units__curriculum_questions')
+        .order_by('-assigned_date')
+    )
+
+    selected_assignment = None
+    tracks = []
+    selected_track = None
+    unit_rows = []
+
+    if selected_assignment_id:
+        selected_assignment = next(
+            (a for a in assignments if str(a.id) == selected_assignment_id), None
+        )
+
+    if selected_assignment:
+        tracks = list(selected_assignment.lesson.sub_lessons.all().order_by('id'))
+
+    if selected_track_id and tracks:
+        selected_track = next((t for t in tracks if str(t.id) == selected_track_id), None)
+
+    if selected_track and selected_assignment:
+        units = list(selected_track.units.all().order_by('id'))
+        unit_ids = [u.id for u in units]
+
+        attempt_counts = {
+            row['unit_id']: row['total']
+            for row in CurriculumUnitAttempt.objects
+            .filter(student_id=student_id, assignment_id=selected_assignment.id, unit_id__in=unit_ids)
+            .values('unit_id')
+            .annotate(total=Count('id'))
+        }
+
+        all_attempts = list(
+            CurriculumUnitAttempt.objects
+            .filter(student_id=student_id, assignment_id=selected_assignment.id, unit_id__in=unit_ids)
+            .order_by('unit_id', '-attempt_number')
+        )
+        latest_attempt_map = {}
+        for attempt in all_attempts:
+            if attempt.unit_id not in latest_attempt_map:
+                latest_attempt_map[attempt.unit_id] = attempt
+
+        unit_rows = [
+            {
+                'id': u.id,
+                'name': u.unit_name,
+                'question_count': u.curriculum_questions.count(),
+                'attempt': latest_attempt_map.get(u.id),
+                'attempt_count': attempt_counts.get(u.id, 0),
+            }
+            for u in units
+        ]
+
+    return render(
+        request,
+        'ui/teacher_student_progress.html',
+        {
+            'current_user': user,
+            'profile': profile,
+            'assignments': assignments,
+            'selected_assignment': selected_assignment,
+            'selected_assignment_id': selected_assignment_id,
+            'tracks': tracks,
+            'selected_track': selected_track,
+            'selected_track_id': selected_track_id,
+            'unit_rows': unit_rows,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Teacher: Toys management
+# ---------------------------------------------------------------------------
+
+@require_http_methods(['GET', 'POST'])
+def teacher_toys(request):
+    user, response = _teacher_guard(request)
+    if response:
+        return response
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '').strip()
+
+        if action == 'add':
+            name = request.POST.get('name', '').strip()
+            coin_value = request.POST.get('coin_value', '').strip()
+            image_file = request.FILES.get('image')
+
+            if not name:
+                messages.error(request, 'Toy name is required.')
+            elif not coin_value or not coin_value.isdigit() or int(coin_value) < 1:
+                messages.error(request, 'Coin value must be a positive number.')
+            else:
+                image_path = _save_toy_image(image_file) if image_file else None
+                Toy.objects.create(
+                    name=name,
+                    coin_value=int(coin_value),
+                    image=image_path,
+                    created_at=timezone.now(),
+                )
+                messages.success(request, f'Toy "{name}" added.')
+            return redirect('ui-teacher-toys')
+
+        if action == 'delete':
+            toy_id = request.POST.get('toy_id', '').strip()
+            toy = get_object_or_404(Toy, id=toy_id)
+            _delete_toy_image(toy.image)
+            toy.delete()
+            messages.success(request, 'Toy removed.')
+            return redirect('ui-teacher-toys')
+
+    toys = Toy.objects.order_by('-created_at')
+    return render(request, 'ui/teacher_toys.html', {
+        'current_user': user,
+        'toys': toys,
+    })
+
+
+def _save_toy_image(image_file):
+    toy_dir = os.path.join(settings.MEDIA_ROOT, 'toys')
+    os.makedirs(toy_dir, exist_ok=True)
+    extension = os.path.splitext(image_file.name)[1] or '.jpg'
+    filename = f'{uuid4().hex}{extension}'
+    absolute_path = os.path.join(toy_dir, filename)
+    with open(absolute_path, 'wb+') as dest:
+        for chunk in image_file.chunks():
+            dest.write(chunk)
+    return f'toys/{filename}'
+
+
+def _delete_toy_image(image_path):
+    if not image_path:
+        return
+    absolute_path = os.path.join(settings.MEDIA_ROOT, image_path)
+    if os.path.exists(absolute_path):
+        os.remove(absolute_path)
+
+
+# ---------------------------------------------------------------------------
+# Teacher: Student toy redemption history
+# ---------------------------------------------------------------------------
+
+@require_http_methods(['GET'])
+def teacher_student_redemptions(request, student_id):
+    user, response = _teacher_guard(request)
+    if response:
+        return response
+
+    profile = get_object_or_404(
+        StudentProfile.objects.select_related('user', 'grade'),
+        user_id=student_id,
+    )
+    redemptions = (
+        ToyRedemption.objects
+        .filter(student_id=student_id)
+        .select_related('toy')
+        .order_by('-redeemed_at')
+    )
+    return render(request, 'ui/teacher_student_redemptions.html', {
+        'current_user': user,
+        'profile': profile,
+        'redemptions': redemptions,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Student: Redeem toy
+# ---------------------------------------------------------------------------
+
+@require_http_methods(['POST'])
+def student_redeem_toy(request):
+    user, response = _student_guard(request)
+    if response:
+        return response
+
+    toy_id = request.POST.get('toy_id', '').strip()
+    if not toy_id:
+        return JsonResponse({'message': 'toy_id is required.'}, status=400)
+
+    toy = get_object_or_404(Toy, id=toy_id)
+
+    with transaction.atomic():
+        profile = StudentProfile.objects.select_for_update().filter(user_id=user.id).first()
+        if not profile:
+            return JsonResponse({'message': 'Student profile not found.'}, status=400)
+        if profile.coins < toy.coin_value:
+            return JsonResponse({'message': 'Not enough coins.'}, status=400)
+
+        profile.coins -= toy.coin_value
+        profile.save(update_fields=['coins'])
+
+        ToyRedemption.objects.create(
+            student_id=user.id,
+            toy_id=toy.id,
+            coins_spent=toy.coin_value,
+            redeemed_at=timezone.now(),
+        )
+
+    return JsonResponse({
+        'message': f'You redeemed "{toy.name}"!',
+        'coins_remaining': profile.coins,
+        'toy_name': toy.name,
+    })

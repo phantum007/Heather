@@ -86,6 +86,33 @@
       </label>
     </div>
 
+    <div>
+      <p class="field-label" style="margin:0 0 10px; font-weight:700; color:#0f172a;">Assignment Mode</p>
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <label style="display:flex; align-items:flex-start; gap:10px; padding:14px 16px; border:2px solid #e2e8f0; border-radius:16px; cursor:pointer; flex:1; min-width:160px; background:#fff;" id="mode-label-sprint">
+          <input type="radio" name="assignment_mode" value="sprint" {% if assignment_mode == 'sprint' or not assignment_mode %}checked{% endif %} style="margin-top:3px; flex-shrink:0;">
+          <div>
+            <p style="margin:0; font-weight:700; color:#0f172a; font-size:14px;">Sprint</p>
+            <p style="margin:4px 0 0; font-size:12px; color:#64748b; line-height:1.4;">All units open freely. Students can attempt any unit in any order.</p>
+          </div>
+        </label>
+        <label style="display:flex; align-items:flex-start; gap:10px; padding:14px 16px; border:2px solid #e2e8f0; border-radius:16px; cursor:pointer; flex:1; min-width:160px; background:#fff;" id="mode-label-standard">
+          <input type="radio" name="assignment_mode" value="standard" {% if assignment_mode == 'standard' %}checked{% endif %} style="margin-top:3px; flex-shrink:0;">
+          <div>
+            <p style="margin:0; font-weight:700; color:#0f172a; font-size:14px;">Standard</p>
+            <p style="margin:4px 0 0; font-size:12px; color:#64748b; line-height:1.4;">Units unlock in order. Must pass unit 1 before opening unit 2, etc.</p>
+          </div>
+        </label>
+        <label style="display:flex; align-items:flex-start; gap:10px; padding:14px 16px; border:2px solid #e2e8f0; border-radius:16px; cursor:pointer; flex:1; min-width:160px; background:#fff;" id="mode-label-lock">
+          <input type="radio" name="assignment_mode" value="lock" {% if assignment_mode == 'lock' %}checked{% endif %} style="margin-top:3px; flex-shrink:0;">
+          <div>
+            <p style="margin:0; font-weight:700; color:#0f172a; font-size:14px;">Lock</p>
+            <p style="margin:4px 0 0; font-size:12px; color:#64748b; line-height:1.4;">Sequential units + must answer each question correctly before moving on.</p>
+          </div>
+        </label>
+      </div>
+    </div>
+
     <div class="lesson-picker-shell">
       <div class="lesson-picker-actions">
         <div>
@@ -427,5 +454,19 @@
     syncAssignmentKind();
     updateSelectedCount();
   })();
+</script>
+
+<script>
+(function() {
+  const radios = document.querySelectorAll('input[name="assignment_mode"]');
+  function updateModeLabels() {
+    radios.forEach(r => {
+      const lbl = r.closest('label');
+      if (lbl) lbl.style.borderColor = r.checked ? '#2563eb' : '#e2e8f0';
+    });
+  }
+  radios.forEach(r => r.addEventListener('change', updateModeLabels));
+  updateModeLabels();
+})();
 </script>
 {% endblock %}

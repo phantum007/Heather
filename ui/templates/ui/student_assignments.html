@@ -49,7 +49,7 @@
           <button type="button" class="button ghost" id="practice-preview-voice">Preview Voice</button>
         </div>
 
-        <div class="speech-settings-grid">
+        <div class="speech-settings-grid" style="display: none;">
           <label class="speech-setting-field" for="practice-language">
             <span id="practice-language-label">Language</span>
             <select id="practice-language" class="input">
@@ -60,7 +60,7 @@
             </select>
           </label>
 
-          <label class="speech-setting-field" for="practice-voice">
+          <label class="speech-setting-field" for="practice-voice" style="display: none;">
             <span id="practice-voice-label">Voice</span>
             <select id="practice-voice" class="input">
               <option value="">Default voice</option>
@@ -551,6 +551,7 @@
       }
       const selectedAssignmentId = "{{ selected_assignment.id|default:'' }}";
       const unitAttemptMap = JSON.parse(document.getElementById('unit-attempt-map').textContent || '{}');
+      const assignmentMode = '{{ selected_assignment.mode|default:"sprint" }}';
       const submitUrl = "{% url 'ui-student-unit-practice-submit' %}";
       let timerStartedAt = null;
       let timerElapsedSeconds = 0;
@@ -897,6 +898,30 @@
         });
       }
 
+      function updateUnitLockStates() {
+        if (assignmentMode !== 'standard' && assignmentMode !== 'lock') return;
+        const trackGroups = {};
+        unitButtons.forEach(function(button) {
+          const trackId = button.dataset.trackId;
+          if (!trackGroups[trackId]) trackGroups[trackId] = [];
+          trackGroups[trackId].push(button);
+        });
+        Object.values(trackGroups).forEach(function(buttons) {
+          buttons.forEach(function(button, index) {
+            const card = button.closest('.practice-unit-card');
+            if (!card) return;
+            if (index === 0) {
+              card.classList.remove('practice-unit-card-locked');
+              return;
+            }
+            const prevButton = buttons[index - 1];
+            const prevState = unitAttemptMap[String(prevButton.dataset.unitId)];
+            const prevPassed = prevState && prevState.status === 'passed';
+            card.classList.toggle('practice-unit-card-locked', !prevPassed);
+          });
+        });
+      }
+
       function renderQuestionNav() {
         nav.innerHTML = '';
 
@@ -1148,8 +1173,8 @@
         const payloadElement = document.getElementById(`unit-questions-${payloadId}`);
         activeQuestions = payloadElement ? JSON.parse(payloadElement.textContent) : [];
         const savedState = loadUnitAttempts(unitId);
-        const isRetryingFailedUnit = savedState.status === 'failed';
-        questionStatuses = isRetryingFailedUnit ? {} : (savedState.statuses || {});
+        const isNewAttempt = savedState.status === 'failed' || savedState.status === 'passed';
+        questionStatuses = isNewAttempt ? {} : (savedState.statuses || {});
         activePracticeMode = practiceMode || 'default';
         activeAudioMode = Boolean(audioMode);
         updateAnswerIcon();
@@ -1157,29 +1182,18 @@
         activeQuestionIndex = nextUnattemptedIndex >= 0 ? nextUnattemptedIndex : 0;
         title.textContent = unitPath || 'Unit';
         showPracticeStage();
-        startTimer(isRetryingFailedUnit ? 0 : (savedState.elapsedSeconds || 0));
+        startTimer(isNewAttempt ? 0 : (savedState.elapsedSeconds || 0));
         renderQuestionNav();
 
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
-        if (savedState.completed && !isRetryingFailedUnit && activeQuestions.length > 0) {
-          stopTimer();
-          showSummaryScreen({
-            wrongCount: savedState.wrongCount,
-            correctCount: savedState.correctCount,
-            passed: savedState.status === 'passed',
-          });
-        } else {
-          renderQuestion();
-        }
+        renderQuestion();
       }
 
       unitButtons.forEach((button) => {
         button.addEventListener('click', function () {
           const card = button.closest('.practice-unit-card');
-          if (card && card.classList.contains('practice-unit-card-complete')) {
-            return;
-          }
+          if (card && card.classList.contains('practice-unit-card-locked')) return;
           selectUnit(button.dataset.unitId);
         });
       });
@@ -1293,6 +1307,20 @@
           checkButton.disabled = true;
           return;
         }
+        // Lock mode: check answer locally first; don't call backend if wrong
+        if (assignmentMode === 'lock') {
+          const expectedAnswer = String(question.answer_text || '').trim().toLowerCase().replace(/,/g, '');
+          const givenAnswer = String(normalizedAnswer || '').trim().toLowerCase().replace(/,/g, '');
+          const locallyCorrect = expectedAnswer !== '' && givenAnswer === expectedAnswer;
+          if (!locallyCorrect) {
+            feedback.textContent = t('incorrectAnswer');
+            feedback.className = 'practice-feedback incorrect';
+            answerInput.value = '';
+            checkButton.disabled = true;
+            return;
+          }
+        }
+
         const formData = new URLSearchParams();
         formData.set('assignment_id', String(selectedAssignmentId));
         formData.set('unit_id', String(activeUnitId));
@@ -1333,6 +1361,7 @@
               },
             };
             updateUnitCompletionStates();
+            updateUnitLockStates();
             renderQuestionNav();
 
             if (data.is_complete) {
@@ -1365,6 +1394,7 @@
       }
       applyLanguage();
       updateUnitCompletionStates();
+      updateUnitLockStates();
     })();
   </script>
 {% endif %}

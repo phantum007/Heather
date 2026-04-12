@@ -1,0 +1,66 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Student redemptions{% endblock %}
+{% block page_title %}Toy Redemptions{% endblock %}
+
+{% block content %}
+<style>
+  .redemp-header { display:flex; align-items:center; gap:14px; padding:18px 20px; border:1px solid #e2e8f0; border-radius:22px; background:#fff; margin-bottom:20px; }
+  .redemp-avatar { width:52px; height:52px; border-radius:16px; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#dbeafe,#cffafe); border:1px solid #bfdbfe; font-size:18px; font-weight:700; color:#0f172a; text-transform:uppercase; overflow:hidden; flex-shrink:0; }
+  .redemp-avatar img { width:100%; height:100%; object-fit:cover; }
+  .redemp-name { margin:0; font-size:20px; font-weight:700; color:#0f172a; }
+  .redemp-meta { margin:4px 0 0; color:#64748b; font-size:13px; }
+  .redemp-row { display:flex; align-items:center; gap:14px; padding:14px 18px; border-radius:18px; border:1px solid #e2e8f0; background:#fff; }
+  .redemp-toy-img { width:48px; height:48px; border-radius:14px; object-fit:cover; background:#f8fafc; display:flex; align-items:center; justify-content:center; font-size:24px; overflow:hidden; flex-shrink:0; }
+  .redemp-toy-img img { width:100%; height:100%; object-fit:cover; display:block; }
+  .redemp-toy-name { margin:0; font-weight:700; color:#0f172a; }
+  .redemp-toy-meta { margin:4px 0 0; font-size:12px; color:#64748b; }
+  .redemp-date { margin-left:auto; font-size:12px; color:#94a3b8; font-weight:600; white-space:nowrap; }
+</style>
+
+<a href="{% url 'ui-teacher-students' %}" class="button secondary" style="margin-bottom:18px;display:inline-flex;">&larr; Back to Students</a>
+
+<div class="redemp-header">
+  <div class="redemp-avatar">
+    {% if profile.profile_photo %}
+      <img src="{% url 'ui-serve-media' path=profile.profile_photo %}" alt="">
+    {% else %}
+      {{ profile.first_name|default:profile.user.name|first|default:'S' }}
+    {% endif %}
+  </div>
+  <div>
+    <p class="redemp-name">{{ profile.first_name|default:'' }} {{ profile.last_name|default:''|cut:'None' }}</p>
+    <p class="redemp-meta">{{ profile.user.email }} &mdash; 🪙 {{ profile.coins }} coin{{ profile.coins|pluralize }} remaining</p>
+  </div>
+</div>
+
+<section class="card">
+  <div class="toolbar" style="margin-bottom:16px;">
+    <p style="margin:0;font-size:15px;font-weight:700;color:#0f172a;">Redemption History</p>
+    <span class="badge">{{ redemptions|length }} redemption{{ redemptions|length|pluralize }}</span>
+  </div>
+
+  {% if redemptions %}
+    <div class="stack">
+      {% for r in redemptions %}
+      <div class="redemp-row">
+        <div class="redemp-toy-img">
+          {% if r.toy.image %}
+            <img src="{% url 'ui-serve-media' path=r.toy.image %}" alt="{{ r.toy.name }}">
+          {% else %}
+            🧸
+          {% endif %}
+        </div>
+        <div>
+          <p class="redemp-toy-name">{{ r.toy.name }}</p>
+          <p class="redemp-toy-meta">🪙 {{ r.coins_spent }} coin{{ r.coins_spent|pluralize }} spent</p>
+        </div>
+        <span class="redemp-date">{{ r.redeemed_at|date:"d M Y, H:i" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">This student has not redeemed any toys yet.</div>
+  {% endif %}
+</section>
+{% endblock %}

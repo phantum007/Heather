@@ -33,6 +33,7 @@
       <a href="{% url 'ui-student-assignments' %}?category=all" data-short="A" class="{% if '/student/assignments/' in request.path and request.GET.category|default:'all' == 'all' %}active{% endif %}"><span class="nav-label">Assignment</span></a>
       <a href="{% url 'ui-student-assignments' %}?category=homework" data-short="H" class="{% if '/student/assignments/' in request.path and request.GET.category == 'homework' %}active{% endif %}"><span class="nav-label">My Homework</span></a>
       <a href="{% url 'ui-student-assignments' %}?category=classroom" data-short="C" class="{% if '/student/assignments/' in request.path and request.GET.category == 'classroom' %}active{% endif %}"><span class="nav-label">My Classroom</span></a>
+      <a href="{% url 'ui-student-coins' %}" data-short="C" class="{% if request.path == '/student/coins/' %}active{% endif %}"><span class="nav-label">My Coins</span></a>
       <a href="{% url 'ui-student-profile' %}" data-short="P" class="{% if request.path == '/student/profile/' %}active{% endif %}"><span class="nav-label">Profile</span></a>
     </nav>
 

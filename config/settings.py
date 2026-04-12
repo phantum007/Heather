@@ -108,6 +108,8 @@ def _database_settings() -> dict:
     }
 
 
+PASSING_UNIT_COIN = int(os.getenv('PASSING_UNIT_COIN', '1'))
+
 SECRET_KEY = os.getenv('JWT_SECRET', 'super_secret_change_me')
 DEBUG = _env_flag('DEBUG')
 
