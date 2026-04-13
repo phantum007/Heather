@@ -119,7 +119,7 @@
           <p class="sublesson-focus-title" id="practice-modal-title">Unit</p>
         </div>
         <div class="practice-head-meta">
-          <button type="button" class="button ghost practice-speed-toggle" id="practice-speed-toggle">Speed</button>
+          <button type="button" disabled class="button ghost practice-speed-toggle" id="practice-speed-toggle">Speed</button>
           <span class="practice-timer" id="practice-timer">00:00</span>
           <button type="button" class="practice-close" id="practice-close" aria-label="Close practice">&times;</button>
         </div>
@@ -850,29 +850,47 @@
         summaryTitle.textContent = passed ? t('youPassed') : t('youWillSucceedNextTime');
         summaryCopy.textContent = passed ? t('niceWork') : t('tryAgain');
         summaryScore.textContent = t('yourScore', {correctCount, totalCount: activeQuestions.length});
+        const scorePct = activeQuestions.length > 0 ? Math.round((correctCount / activeQuestions.length) * 100) : 0;
+        summaryScore.className = scorePct === 100 ? 'score-dark-green' : scorePct > 70 ? 'score-light-green' : 'score-red';
         summaryWrong.textContent = t('wrongAnswers', {wrongCount});
         summaryTime.textContent = t('yourTime', {time: formatTime(timerElapsedSeconds)});
 
-        const remainingButton = Array.from(unitButtons).find((button) => {
-          const card = button.closest('.practice-unit-card');
-          return card && !card.classList.contains('practice-unit-card-complete') && button.dataset.unitId !== String(activeUnitId);
-        });
-        nextUnitButton.disabled = !remainingButton;
-        nextUnitButton.textContent = remainingButton ? t('nextUnit') : t('noMoreUnits');
-        nextUnitButton.onclick = function () {
-          if (!remainingButton) {
-            return;
-          }
-          const card = remainingButton.closest('.practice-unit-card');
-          if (card) {
-            selectUnit(remainingButton.dataset.unitId);
-          }
-          openUnit(
-            remainingButton.dataset.unitId,
-            remainingButton.dataset.unitPath,
-            remainingButton.dataset.practiceMode,
-            remainingButton.dataset.audioMode === 'true'
+        const allButtons = Array.from(unitButtons);
+        const currentIndex = allButtons.findIndex((b) => b.dataset.unitId === String(activeUnitId));
+        // Next unit = simply the next one in DOM order
+        const remainingButton = currentIndex >= 0 && currentIndex < allButtons.length - 1
+          ? allButtons[currentIndex + 1]
+          : null;
+
+        // If no next unit in this lesson, find the next unlocked lesson card
+        let nextLessonUrl = null;
+        if (!remainingButton) {
+          const lessonCards = Array.from(document.querySelectorAll('a.lesson-select-card'));
+          const currentCardIndex = lessonCards.findIndex(
+            (card) => card.href && card.href.includes('assignment_id=' + selectedAssignmentId)
           );
+          if (currentCardIndex >= 0 && currentCardIndex < lessonCards.length - 1) {
+            nextLessonUrl = lessonCards[currentCardIndex + 1].href;
+          }
+        }
+
+        nextUnitButton.disabled = !remainingButton && !nextLessonUrl;
+        nextUnitButton.textContent = remainingButton ? t('nextUnit') : nextLessonUrl ? 'Next Lesson →' : t('noMoreUnits');
+        nextUnitButton.onclick = function () {
+          if (remainingButton) {
+            const card = remainingButton.closest('.practice-unit-card');
+            if (card) { selectUnit(remainingButton.dataset.unitId); }
+            openUnit(
+              remainingButton.dataset.unitId,
+              remainingButton.dataset.unitPath,
+              remainingButton.dataset.practiceMode,
+              remainingButton.dataset.audioMode === 'true'
+            );
+          } else if (nextLessonUrl) {
+            stopTimer();
+            stopSpeech();
+            window.location.href = nextLessonUrl;
+          }
         };
         toListButton.onclick = function () {
           stopTimer();
@@ -880,6 +898,7 @@
           clearFlashSequence();
           modal.classList.remove('is-open');
           modal.setAttribute('aria-hidden', 'true');
+          document.body.style.overflow = '';
         };
       }
 
@@ -903,8 +922,11 @@
           const savedState = loadUnitAttempts(trigger.dataset.unitId);
           const savedStatuses = savedState.statuses || {};
           const isComplete = savedState.status === 'passed';
+          const totalAnswered = Object.keys(savedStatuses).length;
+          const isPerfect = isComplete && totalAnswered > 0 && savedState.correctCount >= totalAnswered;
           card.classList.toggle('practice-unit-card-complete', isComplete);
-          card.classList.toggle('practice-unit-card-passed', savedState.status === 'passed');
+          card.classList.toggle('practice-unit-card-passed', savedState.status === 'passed' && !isPerfect);
+          card.classList.toggle('practice-unit-card-perfect', isPerfect);
           card.classList.toggle('practice-unit-card-failed', savedState.status === 'failed');
           card.classList.toggle('practice-unit-card-unattempted', !savedState.status || savedState.status === 'in_progress');
         });
@@ -919,16 +941,20 @@
           ? activeQuestions.findIndex((item) => !questionStatuses[String(item.id)])
           : -1;
 
+        let activeButton = null;
         activeQuestions.forEach((question, index) => {
           const button = document.createElement('button');
           const status = questionStatuses[String(question.id)] || 'unattempted';
+          const isActive = index === activeQuestionIndex;
           const isFutureLocked = assignmentMode === 'lock' && firstUnansweredIndex >= 0 && index > firstUnansweredIndex;
           button.type = 'button';
           button.disabled = isFutureLocked;
-          button.innerHTML = `${t('questionLabel', {number: index + 1})}<span class="practice-question-status">${status === 'correct' ? t('correct') : status === 'incorrect' ? t('incorrect') : isFutureLocked ? '🔒' : t('readyToAnswer')}</span>`;
+          const statusLabel = status === 'correct' ? t('correct') : status === 'incorrect' ? t('incorrect') : isFutureLocked ? '🔒' : '';
+          button.innerHTML = `${t('questionLabel', {number: index + 1})}${statusLabel ? `<span class="practice-question-status">${statusLabel}</span>` : ''}`;
           button.classList.toggle('is-unattempted', status === 'unattempted' && !isFutureLocked);
           button.classList.toggle('is-correct', status === 'correct');
           button.classList.toggle('is-incorrect', status === 'incorrect');
+          button.classList.toggle('is-active', isActive);
           button.classList.toggle('is-locked', status !== 'unattempted');
           button.classList.toggle('is-future-locked', isFutureLocked);
           button.addEventListener('click', function () {
@@ -940,7 +966,13 @@
             renderQuestion();
           });
           nav.appendChild(button);
+          if (isActive) activeButton = button;
         });
+
+        // Scroll active question into view
+        if (activeButton) {
+          activeButton.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
       }
 
       function renderQuestion() {
@@ -1176,6 +1208,7 @@
         activePracticeMode = practiceMode || 'default';
         activeAudioMode = Boolean(audioMode);
         updateAnswerIcon();
+        updateUnitCompletionStates();
         const nextUnattemptedIndex = activeQuestions.findIndex((item) => !questionStatuses[String(item.id)]);
         activeQuestionIndex = nextUnattemptedIndex >= 0 ? nextUnattemptedIndex : 0;
         title.textContent = unitPath || 'Unit';
@@ -1185,6 +1218,7 @@
 
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
         renderQuestion();
       }
 
@@ -1246,6 +1280,7 @@
           closeSpeedPanel();
           modal.classList.remove('is-open');
           modal.setAttribute('aria-hidden', 'true');
+          document.body.style.overflow = '';
         }
       });
 
