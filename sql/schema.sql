@@ -105,3 +105,32 @@ CREATE INDEX IF NOT EXISTS idx_units_sub_lesson ON units(sub_lesson_id);
 
 ALTER TABLE curriculum_questions
   DROP COLUMN IF EXISTS chapter_id;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_curriculum_questions_unit_order
+  ON curriculum_questions(unit_id, "order")
+  WHERE "order" IS NOT NULL;
+
+ALTER TABLE curriculum_unit_attempts
+  ADD COLUMN IF NOT EXISTS attempt_number INT NOT NULL DEFAULT 1;
+
+DROP INDEX IF EXISTS curriculum_unit_attempts_student_unit_assignment_uniq;
+
+ALTER TABLE students ADD COLUMN IF NOT EXISTS coins INT NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS toys (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    image TEXT,
+    coin_value INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS toy_redemptions (
+    id SERIAL PRIMARY KEY,
+    student_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    toy_id INT NOT NULL REFERENCES toys(id) ON DELETE CASCADE,
+    coins_spent INT NOT NULL,
+    redeemed_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_toy_redemptions_student ON toy_redemptions(student_id);
