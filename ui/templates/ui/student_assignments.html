@@ -40,7 +40,7 @@
         <p class="stat-meta">Teacher: {{ selected_assignment.teacher.name }}{% if selected_assignment.available_on %} • Available {{ selected_assignment.available_on|date:"d M Y" }}{% endif %}</p>
       </div>
 
-      <section class="speech-settings-card">
+      <section class="speech-settings-card" style="display:none;">
         <div class="speech-settings-head">
           <div>
             <p class="stat-label" id="speech-settings-eyebrow">Speech Settings</p>
@@ -49,7 +49,7 @@
           <button type="button" class="button ghost" id="practice-preview-voice">Preview Voice</button>
         </div>
 
-        <div class="speech-settings-grid">
+        <div class="speech-settings-grid" style="display: none;">
           <label class="speech-setting-field" for="practice-language">
             <span id="practice-language-label">Language</span>
             <select id="practice-language" class="input">
@@ -60,7 +60,7 @@
             </select>
           </label>
 
-          <label class="speech-setting-field" for="practice-voice">
+          <label class="speech-setting-field" for="practice-voice" style="display: none;">
             <span id="practice-voice-label">Voice</span>
             <select id="practice-voice" class="input">
               <option value="">Default voice</option>
@@ -218,12 +218,20 @@
 
       <div class="lesson-card-grid">
         {% for assignment in assignments %}
-          <a href="{% url 'ui-student-assignments' %}?category={{ assignment_category }}&assignment_id={{ assignment.id }}" class="lesson-select-card">
+          {% if assignment.is_locked %}
+            <div class="lesson-select-card lesson-select-card-locked" title="Complete the previous lesson to unlock this one">
+          {% else %}
+            <a href="{% url 'ui-student-assignments' %}?category={{ assignment_category }}&assignment_id={{ assignment.id }}" class="lesson-select-card">
+          {% endif %}
             <div class="lesson-card-top">
               <div>
                 <p class="list-title">Grade {{ assignment.lesson.grade.grade_name }} | Lesson {{ assignment.lesson.lesson_name }}</p>
               </div>
-              <span class="badge">{% if assignment.is_submitted %}Submitted{% else %}Pending{% endif %}</span>
+              {% if assignment.is_locked %}
+                <span class="badge" style="background:#f1f5f9;color:#94a3b8;">🔒 Locked</span>
+              {% else %}
+                <span class="badge">{% if assignment.is_submitted %}Submitted{% else %}Pending{% endif %}</span>
+              {% endif %}
             </div>
 
             <p class="lesson-card-subtitle">Teacher: {{ assignment.teacher.name }}</p>
@@ -233,7 +241,11 @@
                 <span class="lesson-meta-pill">{{ assignment.available_on|date:"d M Y" }}</span>
               {% endif %}
             </div>
-          </a>
+          {% if assignment.is_locked %}
+            </div>
+          {% else %}
+            </a>
+          {% endif %}
         {% empty %}
           <div class="empty-state">No lessons are available in this section yet.</div>
         {% endfor %}
@@ -551,6 +563,7 @@
       }
       const selectedAssignmentId = "{{ selected_assignment.id|default:'' }}";
       const unitAttemptMap = JSON.parse(document.getElementById('unit-attempt-map').textContent || '{}');
+      const assignmentMode = '{{ selected_assignment.mode|default:"sprint" }}';
       const submitUrl = "{% url 'ui-student-unit-practice-submit' %}";
       let timerStartedAt = null;
       let timerElapsedSeconds = 0;
@@ -897,19 +910,29 @@
         });
       }
 
+
       function renderQuestionNav() {
         nav.innerHTML = '';
+
+        // In lock mode, nothing after the first unanswered question is reachable
+        const firstUnansweredIndex = assignmentMode === 'lock'
+          ? activeQuestions.findIndex((item) => !questionStatuses[String(item.id)])
+          : -1;
 
         activeQuestions.forEach((question, index) => {
           const button = document.createElement('button');
           const status = questionStatuses[String(question.id)] || 'unattempted';
+          const isFutureLocked = assignmentMode === 'lock' && firstUnansweredIndex >= 0 && index > firstUnansweredIndex;
           button.type = 'button';
-          button.innerHTML = `${t('questionLabel', {number: index + 1})}<span class="practice-question-status">${status === 'correct' ? t('correct') : status === 'incorrect' ? t('incorrect') : t('readyToAnswer')}</span>`;
-          button.classList.toggle('is-unattempted', status === 'unattempted');
+          button.disabled = isFutureLocked;
+          button.innerHTML = `${t('questionLabel', {number: index + 1})}<span class="practice-question-status">${status === 'correct' ? t('correct') : status === 'incorrect' ? t('incorrect') : isFutureLocked ? '🔒' : t('readyToAnswer')}</span>`;
+          button.classList.toggle('is-unattempted', status === 'unattempted' && !isFutureLocked);
           button.classList.toggle('is-correct', status === 'correct');
           button.classList.toggle('is-incorrect', status === 'incorrect');
           button.classList.toggle('is-locked', status !== 'unattempted');
+          button.classList.toggle('is-future-locked', isFutureLocked);
           button.addEventListener('click', function () {
+            if (isFutureLocked) return;
             if (questionStatuses[String(question.id)] && index !== activeQuestionIndex) {
               return;
             }
@@ -1148,8 +1171,8 @@
         const payloadElement = document.getElementById(`unit-questions-${payloadId}`);
         activeQuestions = payloadElement ? JSON.parse(payloadElement.textContent) : [];
         const savedState = loadUnitAttempts(unitId);
-        const isRetryingFailedUnit = savedState.status === 'failed';
-        questionStatuses = isRetryingFailedUnit ? {} : (savedState.statuses || {});
+        const isNewAttempt = savedState.status === 'failed' || savedState.status === 'passed';
+        questionStatuses = isNewAttempt ? {} : (savedState.statuses || {});
         activePracticeMode = practiceMode || 'default';
         activeAudioMode = Boolean(audioMode);
         updateAnswerIcon();
@@ -1157,29 +1180,16 @@
         activeQuestionIndex = nextUnattemptedIndex >= 0 ? nextUnattemptedIndex : 0;
         title.textContent = unitPath || 'Unit';
         showPracticeStage();
-        startTimer(isRetryingFailedUnit ? 0 : (savedState.elapsedSeconds || 0));
+        startTimer(isNewAttempt ? 0 : (savedState.elapsedSeconds || 0));
         renderQuestionNav();
 
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
-        if (savedState.completed && !isRetryingFailedUnit && activeQuestions.length > 0) {
-          stopTimer();
-          showSummaryScreen({
-            wrongCount: savedState.wrongCount,
-            correctCount: savedState.correctCount,
-            passed: savedState.status === 'passed',
-          });
-        } else {
-          renderQuestion();
-        }
+        renderQuestion();
       }
 
       unitButtons.forEach((button) => {
         button.addEventListener('click', function () {
-          const card = button.closest('.practice-unit-card');
-          if (card && card.classList.contains('practice-unit-card-complete')) {
-            return;
-          }
           selectUnit(button.dataset.unitId);
         });
       });
@@ -1293,6 +1303,20 @@
           checkButton.disabled = true;
           return;
         }
+        // Lock mode: check answer locally first; don't call backend if wrong
+        if (assignmentMode === 'lock') {
+          const expectedAnswer = String(question.answer_text || '').trim().toLowerCase().replace(/,/g, '');
+          const givenAnswer = String(normalizedAnswer || '').trim().toLowerCase().replace(/,/g, '');
+          const locallyCorrect = expectedAnswer !== '' && givenAnswer === expectedAnswer;
+          if (!locallyCorrect) {
+            feedback.textContent = t('incorrectAnswer');
+            feedback.className = 'practice-feedback incorrect';
+            answerInput.value = '';
+            checkButton.disabled = true;
+            return;
+          }
+        }
+
         const formData = new URLSearchParams();
         formData.set('assignment_id', String(selectedAssignmentId));
         formData.set('unit_id', String(activeUnitId));

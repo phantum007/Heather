@@ -1,0 +1,81 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Rewards{% endblock %}
+{% block page_title %}Toys{% endblock %}
+
+{% block content %}
+<style>
+  .toys-layout { display:grid; grid-template-columns:340px minmax(0,1fr); gap:20px; align-items:start; }
+  .toy-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:4px; }
+  .toy-card { border:1px solid #e2e8f0; border-radius:22px; overflow:hidden; background:#fff; }
+  .toy-card-img { width:100%; aspect-ratio:1/1; object-fit:cover; background:#f8fafc; display:flex; align-items:center; justify-content:center; font-size:48px; }
+  .toy-card-img img { width:100%; height:100%; object-fit:cover; display:block; }
+  .toy-card-body { padding:14px 16px; }
+  .toy-card-name { margin:0; font-size:15px; font-weight:700; color:#0f172a; }
+  .toy-card-coin { margin:6px 0 0; font-size:13px; font-weight:700; color:#92400e; }
+  .toy-card-footer { padding:0 16px 14px; }
+  .section-label { margin:0 0 14px; font-size:12px; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#94a3b8; }
+  @media(max-width:980px){ .toys-layout{grid-template-columns:1fr;} .toy-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
+</style>
+
+<div class="toys-layout">
+
+  <section class="card">
+    <p class="section-label">Add New Toy</p>
+    <form method="post" enctype="multipart/form-data" style="display:grid;gap:14px;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add">
+      <div class="field">
+        <label>Toy Name</label>
+        <input type="text" name="name" class="input" placeholder="e.g. Teddy Bear" required>
+      </div>
+      <div class="field">
+        <label>Coin Value</label>
+        <input type="number" name="coin_value" class="input" placeholder="e.g. 5" min="1" required>
+      </div>
+      <div class="field">
+        <label>Image <span class="field-note">Optional</span></label>
+        <input type="file" name="image" class="input" accept="image/*" style="padding:10px 16px;">
+      </div>
+      <button type="submit" class="button primary">Add Toy</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="toolbar" style="margin-bottom:16px;">
+      <p class="section-label" style="margin:0;">All Toys</p>
+      <span class="badge">{{ toys|length }} toy{{ toys|length|pluralize }}</span>
+    </div>
+    {% if toys %}
+      <div class="toy-grid">
+        {% for toy in toys %}
+        <div class="toy-card">
+          <div class="toy-card-img">
+            {% if toy.image %}
+              <img src="{% url 'ui-serve-media' path=toy.image %}" alt="{{ toy.name }}">
+            {% else %}
+              🧸
+            {% endif %}
+          </div>
+          <div class="toy-card-body">
+            <p class="toy-card-name">{{ toy.name }}</p>
+            <p class="toy-card-coin">🪙 {{ toy.coin_value }} coin{{ toy.coin_value|pluralize }}</p>
+          </div>
+          <div class="toy-card-footer">
+            <form method="post" onsubmit="return confirm('Remove {{ toy.name|escapejs }}?');">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="toy_id" value="{{ toy.id }}">
+              <button type="submit" class="button danger" style="width:100%;padding:10px;">Remove</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">No toys added yet. Add one using the form.</div>
+    {% endif %}
+  </section>
+
+</div>
+{% endblock %}

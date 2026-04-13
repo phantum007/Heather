@@ -29,6 +29,7 @@
       <a href="{% url 'ui-teacher-students' %}" data-short="S" class="{% if '/teacher/students/' in request.path %}active{% endif %}"><span class="nav-label">Students</span></a>
       <a href="{% url 'ui-teacher-curriculum' %}" data-short="C" class="{% if '/teacher/curriculum/' in request.path %}active{% endif %}"><span class="nav-label">Curriculum</span></a>
       <a href="{% url 'ui-teacher-create-assignment' %}" data-short="A" class="{% if '/teacher/create-assignment/' in request.path %}active{% endif %}"><span class="nav-label">Assignments</span></a>
+      <a href="{% url 'ui-teacher-toys' %}" data-short="T" class="{% if '/teacher/toys/' in request.path %}active{% endif %}"><span class="nav-label">Toys</span></a>
       <a href="{% url 'ui-teacher-results' %}" data-short="L" class="{% if '/teacher/results/' in request.path %}active{% endif %}"><span class="nav-label">Leaderboard</span></a>
       <a href="{% url 'ui-teacher-profile' %}" data-short="P" class="{% if '/teacher/profile/' in request.path %}active{% endif %}"><span class="nav-label">Profile</span></a>
     </nav>

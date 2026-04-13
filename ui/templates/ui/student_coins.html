@@ -1,0 +1,273 @@
+{% extends 'ui/student_base.html' %}
+
+{% block eyebrow %}My rewards{% endblock %}
+{% block page_title %}My Coins{% endblock %}
+
+{% block content %}
+<style>
+  .coins-hero { display:flex; align-items:center; gap:20px; padding:24px 28px; border-radius:26px; background:linear-gradient(135deg,#fef3c7,#fde68a); border:1px solid #fcd34d; margin-bottom:24px; }
+  .coins-hero-icon { font-size:52px; line-height:1; }
+  .coins-hero-value { margin:0; font-size:48px; font-weight:800; color:#78350f; line-height:1; }
+  .coins-hero-label { margin:6px 0 0; font-size:13px; font-weight:700; color:#92400e; letter-spacing:.1em; text-transform:uppercase; }
+
+  .section-heading { margin:0 0 16px; font-size:18px; font-weight:700; color:#0f172a; }
+
+  .toy-shop-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+  .toy-shop-card { border:1px solid #e2e8f0; border-radius:22px; overflow:hidden; background:#fff; display:flex; flex-direction:column; transition:transform .15s ease, box-shadow .15s ease; }
+  .toy-shop-card:not(.unaffordable):hover { transform:translateY(-2px); box-shadow:0 12px 28px rgba(15,23,42,0.08); }
+  .toy-shop-card.unaffordable { opacity:.5; }
+  .toy-shop-img { width:100%; aspect-ratio:1/1; background:#f8fafc; display:flex; align-items:center; justify-content:center; font-size:52px; overflow:hidden; }
+  .toy-shop-img img { width:100%; height:100%; object-fit:cover; display:block; }
+  .toy-shop-body { padding:14px 16px; flex:1; }
+  .toy-shop-name { margin:0; font-size:15px; font-weight:700; color:#0f172a; }
+  .toy-shop-coin { margin:6px 0 0; font-size:13px; font-weight:700; color:#92400e; }
+  .toy-shop-footer { padding:0 16px 14px; }
+  .cart-btn { width:100%; padding:12px; border-radius:16px; font-weight:700; font-size:14px; }
+
+  .redemp-row { display:flex; align-items:center; gap:14px; padding:14px 18px; border-radius:18px; border:1px solid #e2e8f0; background:#fff; }
+  .redemp-toy-img { width:44px; height:44px; border-radius:12px; background:#f8fafc; display:flex; align-items:center; justify-content:center; font-size:22px; overflow:hidden; flex-shrink:0; }
+  .redemp-toy-img img { width:100%; height:100%; object-fit:cover; display:block; }
+  .redemp-toy-name { margin:0; font-weight:700; color:#0f172a; font-size:14px; }
+  .redemp-toy-meta { margin:3px 0 0; font-size:12px; color:#64748b; }
+  .redemp-date { margin-left:auto; font-size:11px; color:#94a3b8; font-weight:600; white-space:nowrap; }
+
+  /* Checkout modal */
+  .checkout-modal { position:fixed; inset:0; background:rgba(15,23,42,0.5); backdrop-filter:blur(5px); display:none; align-items:center; justify-content:center; padding:24px; z-index:900; }
+  .checkout-modal.is-open { display:flex; }
+  .checkout-shell { width:min(420px,100%); border-radius:28px; background:#fff; box-shadow:0 28px 70px rgba(15,23,42,0.22); overflow:hidden; animation: pop-in .2s ease; }
+  @keyframes pop-in { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:scale(1)} }
+  .checkout-img { width:100%; aspect-ratio:2/1; background:#f8fafc; display:flex; align-items:center; justify-content:center; font-size:64px; overflow:hidden; }
+  .checkout-img img { width:100%; height:100%; object-fit:cover; }
+  .checkout-body { padding:22px 24px; }
+  .checkout-title { margin:0; font-size:22px; font-weight:800; color:#0f172a; }
+  .checkout-sub { margin:8px 0 0; color:#64748b; font-size:14px; }
+  .checkout-cost { display:flex; align-items:center; gap:10px; margin:18px 0; padding:14px 16px; border-radius:18px; background:#fef3c7; border:1px solid #fde68a; }
+  .checkout-cost-label { font-size:13px; font-weight:700; color:#78350f; }
+  .checkout-cost-value { margin-left:auto; font-size:20px; font-weight:800; color:#78350f; }
+  .checkout-balance { font-size:12px; color:#92400e; margin-top:4px; }
+  .checkout-actions { display:flex; gap:10px; }
+  .checkout-actions .button { flex:1; }
+
+  .toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%); padding:14px 24px; border-radius:18px; background:#0f172a; color:#fff; font-weight:700; font-size:14px; z-index:999; display:none; box-shadow:0 16px 40px rgba(15,23,42,0.22); }
+  .toast.show { display:block; animation:fadeup .25s ease; }
+  @keyframes fadeup { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+
+  @media(max-width:980px){ .toy-shop-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
+</style>
+
+<div class="coins-hero">
+  <div class="coins-hero-icon">🪙</div>
+  <div>
+    <p class="coins-hero-value" id="coin-balance">{{ coins }}</p>
+    <p class="coins-hero-label">Total coins</p>
+  </div>
+</div>
+
+{% if toys %}
+<section class="card" style="margin-bottom:20px;">
+  <p class="section-heading">Toy Shop</p>
+  <div class="toy-shop-grid">
+    {% for toy in toys %}
+    <div class="toy-shop-card {% if coins < toy.coin_value %}unaffordable{% endif %}"
+         data-cost="{{ toy.coin_value }}">
+      <div class="toy-shop-img">
+        {% if toy.image %}
+          <img src="{% url 'ui-serve-media' path=toy.image %}" alt="{{ toy.name }}"
+               data-img="{% url 'ui-serve-media' path=toy.image %}">
+        {% else %}
+          🧸
+        {% endif %}
+      </div>
+      <div class="toy-shop-body">
+        <p class="toy-shop-name">{{ toy.name }}</p>
+        <p class="toy-shop-coin">🪙 {{ toy.coin_value }} coin{{ toy.coin_value|pluralize }}</p>
+      </div>
+      <div class="toy-shop-footer">
+        {% if coins >= toy.coin_value %}
+          <button class="button primary cart-btn"
+                  data-toy-id="{{ toy.id }}"
+                  data-toy-name="{{ toy.name|escapejs }}"
+                  data-toy-cost="{{ toy.coin_value }}"
+                  data-toy-img="{% if toy.image %}{% url 'ui-serve-media' path=toy.image %}{% endif %}"
+                  onclick="openCheckout(this)">
+            🛒 Add to Cart
+          </button>
+        {% else %}
+          <button class="button secondary cart-btn" disabled>
+            Need {{ toy.coin_value }} 🪙
+          </button>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% else %}
+<section class="card" style="margin-bottom:20px;">
+  <p class="section-heading">Toy Shop</p>
+  <div class="empty-state">No toys available yet. Check back soon!</div>
+</section>
+{% endif %}
+
+<section class="card">
+  <p class="section-heading">Redemption History</p>
+  {% if redemptions %}
+    <div class="stack" id="redemption-list">
+      {% for r in redemptions %}
+      <div class="redemp-row">
+        <div class="redemp-toy-img">
+          {% if r.toy.image %}
+            <img src="{% url 'ui-serve-media' path=r.toy.image %}" alt="{{ r.toy.name }}">
+          {% else %}🧸{% endif %}
+        </div>
+        <div>
+          <p class="redemp-toy-name">{{ r.toy.name }}</p>
+          <p class="redemp-toy-meta">🪙 {{ r.coins_spent }} coin{{ r.coins_spent|pluralize }} spent</p>
+        </div>
+        <span class="redemp-date">{{ r.redeemed_at|date:"d M Y, H:i" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state" id="redemption-empty">No redemptions yet. Use your coins in the shop above!</div>
+  {% endif %}
+</section>
+
+<!-- Checkout modal -->
+<div class="checkout-modal" id="checkout-modal" onclick="closeCheckoutOnBackdrop(event)">
+  <div class="checkout-shell">
+    <div class="checkout-img" id="checkout-img-wrap">
+      <span id="checkout-img-emoji">🧸</span>
+    </div>
+    <div class="checkout-body">
+      <p class="checkout-title" id="checkout-name">Toy Name</p>
+      <p class="checkout-sub">Are you sure you want to redeem this toy?</p>
+      <div class="checkout-cost">
+        <span class="checkout-cost-label">🪙 Cost</span>
+        <span class="checkout-cost-value" id="checkout-cost">0 coins</span>
+      </div>
+      <p class="checkout-balance" id="checkout-balance-after"></p>
+      <div class="checkout-actions">
+        <button class="button secondary" onclick="closeCheckout()">Cancel</button>
+        <button class="button primary" id="checkout-confirm-btn" onclick="confirmRedeem()">Confirm Redeem</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const csrfToken = '{{ csrf_token }}';
+let pendingToyId = null, pendingToyName = null, pendingToyCost = null;
+
+function openCheckout(btn) {
+  pendingToyId   = btn.dataset.toyId;
+  pendingToyName = btn.dataset.toyName;
+  pendingToyCost = parseInt(btn.dataset.toyCost);
+  const imgSrc   = btn.dataset.toyImg;
+  const balance  = parseInt(document.getElementById('coin-balance').textContent);
+
+  document.getElementById('checkout-name').textContent = pendingToyName;
+  document.getElementById('checkout-cost').textContent = pendingToyCost + ' coin' + (pendingToyCost !== 1 ? 's' : '');
+  document.getElementById('checkout-balance-after').textContent =
+    'Balance after: ' + (balance - pendingToyCost) + ' coins';
+
+  const wrap = document.getElementById('checkout-img-wrap');
+  if (imgSrc) {
+    wrap.innerHTML = '<img src="' + imgSrc + '" alt="' + pendingToyName + '">';
+  } else {
+    wrap.innerHTML = '<span id="checkout-img-emoji" style="font-size:64px;">🧸</span>';
+  }
+
+  document.getElementById('checkout-modal').classList.add('is-open');
+}
+
+function closeCheckout() {
+  document.getElementById('checkout-modal').classList.remove('is-open');
+  pendingToyId = pendingToyName = pendingToyCost = null;
+}
+
+function closeCheckoutOnBackdrop(e) {
+  if (e.target === document.getElementById('checkout-modal')) closeCheckout();
+}
+
+function confirmRedeem() {
+  const btn = document.getElementById('checkout-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = 'Redeeming…';
+
+  fetch('{% url "ui-student-redeem-toy" %}', {
+    method: 'POST',
+    headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'toy_id=' + pendingToyId,
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.textContent = 'Confirm Redeem';
+
+    // Capture before closeCheckout() nulls them out
+    const toyId = pendingToyId;
+    const toyName = data.toy_name || pendingToyName;
+    const coinCost = pendingToyCost;
+
+    closeCheckout();
+
+    if (data.coins_remaining === undefined) {
+      showToast(data.message || 'Something went wrong.');
+      return;
+    }
+
+    // Update balance
+    const newBalance = data.coins_remaining;
+    document.getElementById('coin-balance').textContent = newBalance;
+
+    // Update cards affordability
+    document.querySelectorAll('.toy-shop-card').forEach(card => {
+      const cost = parseInt(card.dataset.cost || '0');
+      const cardBtn = card.querySelector('.cart-btn');
+      if (!cardBtn) return;
+      if (newBalance < cost) {
+        card.classList.add('unaffordable');
+        cardBtn.disabled = true;
+        cardBtn.className = 'button secondary cart-btn';
+        cardBtn.textContent = 'Need ' + cost + ' 🪙';
+      }
+    });
+
+    // Mark the redeemed toy's button
+    const redeemedCard = document.querySelector('[data-toy-id="' + toyId + '"]')?.closest('.toy-shop-card');
+    if (redeemedCard) {
+      const cardBtn = redeemedCard.querySelector('.cart-btn');
+      if (cardBtn) { cardBtn.disabled = true; cardBtn.textContent = '✓ Redeemed'; }
+    }
+
+    // Add to redemption history
+    const list = document.getElementById('redemption-list');
+    const empty = document.getElementById('redemption-empty');
+    const now = new Date().toLocaleString('en-GB', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const row = '<div class="redemp-row"><div class="redemp-toy-img">🧸</div><div><p class="redemp-toy-name">' + toyName + '</p><p class="redemp-toy-meta">🪙 ' + coinCost + ' coin(s) spent</p></div><span class="redemp-date">' + now + '</span></div>';
+    if (list) {
+      list.insertAdjacentHTML('afterbegin', row);
+    } else if (empty) {
+      empty.outerHTML = '<div class="stack" id="redemption-list">' + row + '</div>';
+    }
+
+    showToast('🎉 You redeemed ' + toyName + '!');
+  })
+  .catch(() => {
+    btn.disabled = false;
+    btn.textContent = 'Confirm Redeem';
+    showToast('Failed. Please try again.');
+  });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+{% endblock %}

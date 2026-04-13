@@ -1,0 +1,203 @@
+{% extends 'ui/teacher_base.html' %}
+
+{% block eyebrow %}Student progress{% endblock %}
+{% block page_title %}Progress{% endblock %}
+
+{% block content %}
+<style>
+  .prog-header { display:flex; align-items:center; gap:14px; padding:18px 20px; border:1px solid #e2e8f0; border-radius:22px; background:#fff; margin-bottom:20px; }
+  .prog-avatar { width:52px; height:52px; border-radius:16px; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#dbeafe,#cffafe); border:1px solid #bfdbfe; font-size:18px; font-weight:700; color:#0f172a; text-transform:uppercase; overflow:hidden; flex-shrink:0; }
+  .prog-avatar img { width:100%; height:100%; object-fit:cover; }
+  .prog-name { margin:0; font-size:20px; font-weight:700; color:#0f172a; }
+  .prog-meta { margin:4px 0 0; color:#64748b; font-size:13px; }
+
+  .filter-row { display:flex; gap:14px; align-items:flex-end; margin-bottom:20px; flex-wrap:wrap; }
+  .filter-field { display:grid; gap:6px; min-width:220px; }
+  .filter-label { font-size:11px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:#94a3b8; }
+  .filter-select { padding:12px 16px; border-radius:16px; border:1px solid #cbd5e1; background:#fff; font:inherit; font-weight:600; color:#334155; cursor:pointer; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; padding-right:38px; }
+  .filter-select:focus { outline:none; border-color:#93c5fd; }
+  .filter-select:disabled { opacity:.45; cursor:not-allowed; }
+
+  .unit-list { display:grid; gap:10px; margin-top:4px; }
+  .unit-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 18px; border-radius:18px; border:1px solid #e2e8f0; background:#fff; }
+  .unit-row.attempted { background:#f0fdf4; border-color:#86efac; }
+  .unit-row-left { display:flex; align-items:center; gap:12px; min-width:0; }
+  .unit-dot { width:10px; height:10px; border-radius:999px; flex-shrink:0; background:#cbd5e1; }
+  .unit-row.attempted .unit-dot { background:#22c55e; }
+  .unit-title { font-weight:700; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .unit-row-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .unit-status { font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; padding:5px 10px; border-radius:999px; }
+  .unit-status.passed  { background:#dcfce7; color:#15803d; }
+  .unit-status.failed  { background:#ffe4e6; color:#be123c; }
+  .unit-status.in_progress { background:#dbeafe; color:#1d4ed8; }
+  .unit-score { font-size:12px; font-weight:700; color:#64748b; }
+  .unit-reset-btn { padding:6px 12px; font-size:12px; border-radius:12px; }
+  .section-title { margin:0 0 12px; font-size:15px; font-weight:700; color:#0f172a; }
+
+  .unit-history { margin: -4px 0 6px; padding: 0 8px; }
+  .history-panel { display:grid; gap:10px; padding:12px 0 4px; }
+  .history-empty { padding:12px 16px; color:#94a3b8; font-size:13px; font-weight:600; }
+  .history-attempt { border:1px solid #e2e8f0; border-radius:16px; overflow:hidden; background:#fff; }
+  .history-attempt-head { display:flex; align-items:center; gap:12px; padding:12px 16px; flex-wrap:wrap; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+  .history-attempt-num { font-size:13px; font-weight:800; color:#0f172a; }
+  .history-score { font-size:12px; font-weight:700; color:#64748b; }
+  .history-date { font-size:11px; color:#94a3b8; font-weight:600; margin-left:auto; }
+  .history-questions { display:grid; gap:0; }
+  .history-q { display:flex; align-items:center; gap:12px; padding:10px 16px; border-top:1px solid #f1f5f9; flex-wrap:wrap; font-size:13px; }
+  .history-q.hq-correct { background:#f0fdf4; }
+  .history-q.hq-wrong   { background:#fff8f8; }
+  .hq-text { flex:1; min-width:0; font-weight:600; color:#334155; }
+  .hq-ans  { font-weight:700; color:#475569; white-space:nowrap; }
+  .hq-ans.correct-ans { color:#15803d; }
+</style>
+
+<a href="{% url 'ui-teacher-students' %}" class="button secondary" style="margin-bottom:18px;display:inline-flex;">&larr; Back</a>
+
+<div class="prog-header">
+  <div class="prog-avatar">
+    {% if profile.profile_photo %}
+      <img src="{% url 'ui-serve-media' path=profile.profile_photo %}" alt="">
+    {% else %}
+      {{ profile.first_name|default:profile.user.name|first|default:'S' }}
+    {% endif %}
+  </div>
+  <div>
+    <p class="prog-name">{{ profile.first_name|default:'' }} {{ profile.last_name|default:''|cut:'None' }}</p>
+    <p class="prog-meta">{{ profile.user.email }} &mdash; {{ profile.grade.grade_name|default:'Unassigned' }}</p>
+  </div>
+</div>
+
+<form method="get" id="filter-form">
+  <div class="filter-row">
+    <div class="filter-field">
+      <span class="filter-label">Lesson</span>
+      <select name="assignment_id" class="filter-select" onchange="this.form.submit()">
+        <option value="">— Select lesson —</option>
+        {% for assignment in assignments %}
+          <option value="{{ assignment.id }}" {% if selected_assignment_id == assignment.id|stringformat:'s' %}selected{% endif %}>
+            {{ assignment.lesson.lesson_name }} ({{ assignment.get_assignment_kind_display }})
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-field">
+      <span class="filter-label">Track</span>
+      <select name="track_id" class="filter-select" onchange="this.form.submit()" {% if not tracks %}disabled{% endif %}>
+        <option value="">— Select track —</option>
+        {% for track in tracks %}
+          <option value="{{ track.id }}" {% if selected_track_id == track.id|stringformat:'s' %}selected{% endif %}>
+            {{ track.sub_lesson_name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+</form>
+
+{% if selected_track_id %}
+  <section class="card">
+    <p class="section-title">
+      Units{% if selected_track %} — {{ selected_track.sub_lesson_name }}{% endif %}
+    </p>
+
+    {% if unit_rows %}
+      <div class="unit-list">
+        {% for row in unit_rows %}
+        <div class="unit-row {% if row.attempt %}attempted{% endif %}" id="unit-row-{{ row.id }}">
+          <div class="unit-row-left">
+            <span class="unit-dot"></span>
+            <span class="unit-title">{{ row.name }}</span>
+            {% if row.attempt_count > 1 %}
+              <span style="font-size:11px;color:#94a3b8;font-weight:700;">{{ row.attempt_count }} attempts</span>
+            {% endif %}
+          </div>
+          <div class="unit-row-right">
+            {% if row.attempt %}
+              <span class="unit-score">{{ row.attempt.correct_count }}✓ {{ row.attempt.wrong_count }}✗</span>
+              <span class="unit-status {{ row.attempt.status }}">{{ row.attempt.status|title }}</span>
+              <button class="button secondary unit-reset-btn"
+                      onclick="showHistory({{ row.id }}, {{ selected_assignment.id }}, {{ profile.user.id }}, this)">
+                History
+              </button>
+              <form method="post"
+                    action="{% url 'ui-teacher-reset-student-unit' profile.user.id row.id %}"
+                    onsubmit="return doReset(event,this,'{{ row.name|escapejs }}')">
+                {% csrf_token %}
+                <input type="hidden" name="assignment_id" value="{{ selected_assignment.id }}">
+                <button type="submit" class="button danger unit-reset-btn">Reset</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+        <div class="unit-history" id="history-{{ row.id }}" style="display:none;"></div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">No units found.</div>
+    {% endif %}
+  </section>
+{% endif %}
+
+<script>
+function doReset(e, form, name) {
+  e.preventDefault();
+  if (!confirm('Reset "' + name + '"?')) return;
+  const btn = form.querySelector('button[type="submit"]');
+  btn.disabled = true; btn.textContent = 'Resetting…';
+  fetch(form.action, { method:'POST', body:new FormData(form) })
+    .then(r => r.json())
+    .then(() => location.reload())
+    .catch(() => { btn.disabled=false; btn.textContent='Reset'; alert('Reset failed.'); });
+}
+
+function showHistory(unitId, assignmentId, studentId, btn) {
+  const panel = document.getElementById('history-' + unitId);
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    btn.textContent = 'History';
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Loading…';
+  fetch('/teacher/students/' + studentId + '/units/' + unitId + '/attempts/?assignment_id=' + assignmentId)
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false; btn.textContent = 'History';
+      if (!data.attempts || data.attempts.length === 0) {
+        panel.innerHTML = '<div class="history-empty">No attempt history found.</div>';
+        panel.style.display = 'block';
+        return;
+      }
+      let html = '<div class="history-panel">';
+      data.attempts.forEach(a => {
+        const date = a.completed_at ? new Date(a.completed_at).toLocaleString() : (a.created_at ? new Date(a.created_at).toLocaleString() : '—');
+        const statusClass = a.status === 'passed' ? 'passed' : a.status === 'failed' ? 'failed' : 'in_progress';
+        html += '<div class="history-attempt">';
+        html += '<div class="history-attempt-head">';
+        html += '<span class="history-attempt-num">Attempt #' + a.attempt_number + '</span>';
+        html += '<span class="unit-status ' + statusClass + '">' + a.status.replace('_',' ') + '</span>';
+        html += '<span class="history-score">' + a.correct_count + ' correct &nbsp; ' + a.wrong_count + ' wrong</span>';
+        html += '<span class="history-date">' + date + '</span>';
+        html += '</div>';
+        if (a.questions && a.questions.length) {
+          html += '<div class="history-questions">';
+          a.questions.forEach(q => {
+            const cls = q.is_correct ? 'hq-correct' : 'hq-wrong';
+            html += '<div class="history-q ' + cls + '">';
+            html += '<span class="hq-text">' + q.question_text + '</span>';
+            html += '<span class="hq-ans">Student: <strong>' + q.student_answer + '</strong></span>';
+            if (!q.is_correct) html += '<span class="hq-ans correct-ans">Correct: <strong>' + (q.correct_answer || '—') + '</strong></span>';
+            html += '</div>';
+          });
+          html += '</div>';
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+      panel.innerHTML = html;
+      panel.style.display = 'block';
+    })
+    .catch(() => { btn.disabled=false; btn.textContent='History'; alert('Failed to load history.'); });
+}
+</script>
+{% endblock %}

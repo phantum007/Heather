@@ -41,6 +41,7 @@ class StudentProfile(models.Model):
     mother_name = models.CharField(max_length=120, null=True, blank=True)
     contact = models.CharField(max_length=40, null=True, blank=True)
     profile_photo = models.TextField(null=True, blank=True)
+    coins = models.PositiveIntegerField(default=0)
 
     class Meta:
         db_table = 'students'
@@ -108,6 +109,14 @@ class Assignment(models.Model):
         (KIND_HOMEWORK, 'Homework'),
         (KIND_CLASSROOM, 'Classroom Lesson'),
     )
+    MODE_SPRINT = 'sprint'
+    MODE_STANDARD = 'standard'
+    MODE_LOCK = 'lock'
+    MODE_CHOICES = (
+        (MODE_SPRINT, 'Sprint'),
+        (MODE_STANDARD, 'Standard'),
+        (MODE_LOCK, 'Lock'),
+    )
 
     teacher = models.ForeignKey(AppUser, on_delete=models.CASCADE, db_column='teacher_id', related_name='teacher_assignments')
     student = models.ForeignKey(AppUser, on_delete=models.CASCADE, db_column='student_id', related_name='student_assignments')
@@ -115,6 +124,7 @@ class Assignment(models.Model):
     assigned_date = models.DateTimeField()
     assignment_kind = models.CharField(max_length=20, choices=KIND_CHOICES, default=KIND_HOMEWORK)
     available_on = models.DateField(null=True, blank=True)
+    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default=MODE_SPRINT)
 
     class Meta:
         db_table = 'assignments'
@@ -158,6 +168,7 @@ class CurriculumUnitAttempt(models.Model):
     unit = models.ForeignKey(Unit, on_delete=models.CASCADE, db_column='unit_id', related_name='attempts')
     assignment = models.ForeignKey(Assignment, null=True, blank=True, on_delete=models.CASCADE, db_column='assignment_id', related_name='curriculum_unit_attempts')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_PROGRESS)
+    attempt_number = models.PositiveIntegerField(default=1)
     elapsed_seconds = models.PositiveIntegerField(default=0)
     correct_count = models.PositiveIntegerField(default=0)
     wrong_count = models.PositiveIntegerField(default=0)
@@ -168,7 +179,6 @@ class CurriculumUnitAttempt(models.Model):
     class Meta:
         db_table = 'curriculum_unit_attempts'
         managed = False
-        unique_together = ('student', 'unit', 'assignment')
 
 
 class CurriculumQuestionAttempt(models.Model):
@@ -181,4 +191,25 @@ class CurriculumQuestionAttempt(models.Model):
     class Meta:
         db_table = 'curriculum_question_attempts'
         managed = False
-        unique_together = ('unit_attempt', 'curriculum_question')
+
+
+class Toy(models.Model):
+    name = models.CharField(max_length=120)
+    image = models.TextField(null=True, blank=True)
+    coin_value = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'toys'
+        managed = False
+
+
+class ToyRedemption(models.Model):
+    student = models.ForeignKey(AppUser, on_delete=models.CASCADE, db_column='student_id', related_name='toy_redemptions')
+    toy = models.ForeignKey(Toy, on_delete=models.CASCADE, db_column='toy_id', related_name='redemptions')
+    coins_spent = models.PositiveIntegerField()
+    redeemed_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'toy_redemptions'
+        managed = False
