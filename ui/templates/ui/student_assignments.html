@@ -1204,6 +1204,15 @@
         activeQuestions = payloadElement ? JSON.parse(payloadElement.textContent) : [];
         const savedState = loadUnitAttempts(unitId);
         const isNewAttempt = savedState.status === 'failed' || savedState.status === 'passed';
+        if (isNewAttempt) {
+          unitAttemptMap[String(unitId)] = {
+            status: 'in_progress',
+            elapsed_seconds: 0,
+            correct_count: 0,
+            wrong_count: 0,
+            question_statuses: {},
+          };
+        }
         questionStatuses = isNewAttempt ? {} : (savedState.statuses || {});
         activePracticeMode = practiceMode || 'default';
         activeAudioMode = Boolean(audioMode);
