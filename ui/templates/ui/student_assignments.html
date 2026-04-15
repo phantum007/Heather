@@ -949,7 +949,7 @@
           const isFutureLocked = assignmentMode === 'lock' && firstUnansweredIndex >= 0 && index > firstUnansweredIndex;
           button.type = 'button';
           button.disabled = isFutureLocked;
-          const statusLabel = status === 'correct' ? t('correct') : status === 'incorrect' ? t('incorrect') : isFutureLocked ? '🔒' : '';
+          const statusLabel = status === 'correct' ? '✔' : status === 'incorrect' ? '✘' : isFutureLocked ? '🔒' : '';
           button.innerHTML = `${t('questionLabel', {number: index + 1})}${statusLabel ? `<span class="practice-question-status">${statusLabel}</span>` : ''}`;
           button.classList.toggle('is-unattempted', status === 'unattempted' && !isFutureLocked);
           button.classList.toggle('is-correct', status === 'correct');
@@ -1204,6 +1204,15 @@
         activeQuestions = payloadElement ? JSON.parse(payloadElement.textContent) : [];
         const savedState = loadUnitAttempts(unitId);
         const isNewAttempt = savedState.status === 'failed' || savedState.status === 'passed';
+        if (isNewAttempt) {
+          unitAttemptMap[String(unitId)] = {
+            status: 'in_progress',
+            elapsed_seconds: 0,
+            correct_count: 0,
+            wrong_count: 0,
+            question_statuses: {},
+          };
+        }
         questionStatuses = isNewAttempt ? {} : (savedState.statuses || {});
         activePracticeMode = practiceMode || 'default';
         activeAudioMode = Boolean(audioMode);
@@ -1340,8 +1349,14 @@
         }
         // Lock mode: check answer locally first; don't call backend if wrong
         if (assignmentMode === 'lock') {
-          const expectedAnswer = String(question.answer_text || '').trim().toLowerCase().replace(/,/g, '');
-          const givenAnswer = String(normalizedAnswer || '').trim().toLowerCase().replace(/,/g, '');
+          const _normForLock = (v) => {
+            const s = String(v || '').trim().replace(/,/g, '').toLowerCase();
+            // Strip trailing decimal zeros to match server Decimal.normalize() behaviour
+            // e.g. "1.0" -> "1", "1.50" -> "1.5", "1.500" -> "1.5"
+            return s.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+          };
+          const expectedAnswer = _normForLock(question.answer_text);
+          const givenAnswer = _normForLock(normalizedAnswer);
           const locallyCorrect = expectedAnswer !== '' && givenAnswer === expectedAnswer;
           if (!locallyCorrect) {
             feedback.textContent = t('incorrectAnswer');
