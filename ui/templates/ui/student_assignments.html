@@ -128,10 +128,8 @@
         <div class="practice-speed-panel-backdrop" id="practice-speed-panel-backdrop"></div>
         <div class="practice-speed-dialog" role="dialog" aria-modal="true" aria-labelledby="practice-speed-title">
           <div class="practice-speed-dialog-head">
-            <div>
-              <p class="stat-label" id="practice-speed-eyebrow">Speech Control</p>
-              <h4 class="speech-settings-title" id="practice-speed-title">Adjust voice speed and line gap</h4>
-            </div>
+            <p class="stat-label" id="practice-speed-eyebrow" hidden></p>
+            <h4 class="speech-settings-title" id="practice-speed-title" hidden></h4>
             <button type="button" class="practice-close practice-speed-close" id="practice-speed-close" aria-label="Close speed settings">&times;</button>
           </div>
           <div class="danger-zone-row">
@@ -325,7 +323,7 @@
       const toListButton = document.getElementById('practice-to-list');
       const nextUnitButton = document.getElementById('practice-next-unit');
 
-      if (!modal || !title || !nav || !stageQuestion || !speechSettingsEyebrow || !speechSettingsTitle || !previewVoiceButton || !speedToggleButton || !speedPanel || !speedPanelBackdrop || !speedEyebrow || !speedTitle || !speedCloseButton || !languageLabel || !languageSelect || !voiceLabel || !voiceSelect || !voiceRateLabel || !voiceRateSelect || !voiceRateValue || !voiceRateFill || !voiceRateInc || !voiceRateDec || !lineGapLabel || !lineGapSelect || !lineGapValue || !lineGapFill || !lineGapInc || !lineGapDec || !dangerZoneToggle || !answerIcon || !answerInput || !feedback || !checkButton || !timer || !summary || !summaryTitle || !summaryCopy || !summaryScore || !summaryWrong || !summaryTime || !toListButton || !nextUnitButton) {
+      if (!modal || !title || !nav || !stageQuestion || !speechSettingsEyebrow || !speechSettingsTitle || !previewVoiceButton || !speedToggleButton || !speedPanel || !speedPanelBackdrop || !speedEyebrow || !speedTitle || !speedCloseButton || !languageLabel || !languageSelect || !voiceLabel || !voiceSelect || !voiceRateLabel || !voiceRateSelect || !voiceRateValue || !voiceRateFill || !voiceRateTrack || !voiceRateInc || !voiceRateDec || !lineGapLabel || !lineGapSelect || !lineGapValue || !lineGapFill || !lineGapTrack || !lineGapInc || !lineGapDec || !dangerZoneToggle || !answerIcon || !answerInput || !feedback || !checkButton || !timer || !summary || !summaryTitle || !summaryCopy || !summaryScore || !summaryWrong || !summaryTime || !toListButton || !nextUnitButton) {
         return;
       }
 
@@ -386,9 +384,11 @@
             '9': 'nine',
           },
           operators: {
+            plus: 'plus',
             divide: 'divided by',
             times: 'times',
             minus: 'minus',
+            equals: 'equals',
           },
         },
         hi: {
@@ -447,9 +447,11 @@
             '9': 'नौ',
           },
           operators: {
+            plus: 'जमा',
             divide: 'भाग',
             times: 'गुणा',
             minus: 'माइनस',
+            equals: 'बराबर',
           },
         },
         es: {
@@ -508,9 +510,11 @@
             '9': 'nueve',
           },
           operators: {
+            plus: 'más',
             divide: 'dividido por',
             times: 'por',
             minus: 'menos',
+            equals: 'igual',
           },
         },
         fr: {
@@ -569,9 +573,11 @@
             '9': 'neuf',
           },
           operators: {
+            plus: 'plus',
             divide: 'divisé par',
             times: 'fois',
             minus: 'moins',
+            equals: 'égal',
           },
         },
       };
@@ -677,12 +683,25 @@
         return String(locale.voiceLang || translations.en.voiceLang).split('-')[0].toLowerCase();
       }
 
+      const NOVELTY_VOICES = new Set([
+        'albert', 'bad news', 'bahh', 'bells', 'boing', 'bubbles', 'cellos',
+        'deranged', 'fred', 'good news', 'hysterical', 'junior', 'kathy',
+        'organ', 'pipe organ', 'princess', 'ralph', 'trinoids', 'whisper',
+        'wobble', 'xander', 'zarvox',
+      ]);
+
+      function isProfessionalVoice(voice) {
+        const nameLower = String(voice.name || '').toLowerCase();
+        return !NOVELTY_VOICES.has(nameLower) && !nameLower.startsWith('com.');
+      }
+
       function refreshVoiceOptions() {
         const defaultLabel = t('defaultVoice');
         const currentPrefix = getLanguagePrefix();
-        const matchingVoices = availableVoices.filter((voice) => (
-          String(voice.lang || '').toLowerCase().startsWith(currentPrefix)
-        ));
+        const matchingVoices = availableVoices.filter((voice) =>
+          String(voice.lang || '').toLowerCase().startsWith(currentPrefix) &&
+          isProfessionalVoice(voice)
+        );
         const selectedValue = activeVoiceName;
         voiceSelect.innerHTML = '';
 
@@ -691,11 +710,25 @@
         defaultOption.textContent = defaultLabel;
         voiceSelect.appendChild(defaultOption);
 
+        const byRegion = {};
         matchingVoices.forEach((voice) => {
-          const option = document.createElement('option');
-          option.value = voice.name;
-          option.textContent = `${voice.name} (${voice.lang})`;
-          voiceSelect.appendChild(option);
+          const key = String(voice.lang || '').toLowerCase();
+          if (!byRegion[key]) byRegion[key] = [];
+          byRegion[key].push(voice);
+        });
+
+        Object.keys(byRegion).sort().forEach((regionKey) => {
+          const group = document.createElement('optgroup');
+          group.label = regionKey.toUpperCase();
+          byRegion[regionKey]
+            .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+            .forEach((voice) => {
+              const option = document.createElement('option');
+              option.value = voice.name;
+              option.textContent = voice.name;
+              group.appendChild(option);
+            });
+          voiceSelect.appendChild(group);
         });
 
         const hasSelectedVoice = matchingVoices.some((voice) => voice.name === selectedValue);
@@ -857,19 +890,42 @@
         const locale = getLocaleConfig();
         const digitWords = locale.digitWords || translations.en.digitWords;
         const operators = locale.operators || translations.en.operators;
-        const spokenLines = String(questionText)
-          .split(/\n+/)
-          .map((part) => part.trim())
-          .filter(Boolean)
-          .map((part) => part
-            .replace(/\s*\/\s*/g, ` ${operators.divide} `)
-            .replace(/\s*x\s*/gi, ` ${operators.times} `)
-            .replace(/\s*-\s*/g, ` ${operators.minus} `)
-            .replace(/\d+/g, (digits) => digits.split('').map((digit) => digitWords[digit] || digit).join(', '))
+
+        function digitsToWords(str) {
+          return String(str)
+            .replace(/\d+/g, (digits) => digits.split('').map((d) => digitWords[d] || d).join(' '))
             .replace(/\s{2,}/g, ' ')
-            .trim()
-          )
-          .filter(Boolean);
+            .trim();
+        }
+
+        function lineToSpoken(line, index) {
+          const raw = line.trim();
+          if (index === 0) return digitsToWords(raw);
+          if (/^[+]/.test(raw)) return `${operators.plus || 'plus'} ${digitsToWords(raw.slice(1).trim())}`;
+          if (/^[-]/.test(raw)) return `${operators.minus} ${digitsToWords(raw.slice(1).trim())}`;
+          if (/^[×x*]/.test(raw)) return `${operators.times} ${digitsToWords(raw.slice(1).trim())}`;
+          if (/^[÷/]/.test(raw)) return `${operators.divide} ${digitsToWords(raw.slice(1).trim())}`;
+          return digitsToWords(raw);
+        }
+
+        const rawSpokenLines = String(questionText).split(/\n+/).map((p) => p.trim()).filter(Boolean);
+        // Build digit-by-digit token list with operator between number groups
+        const spokenLines = [];
+        rawSpokenLines.forEach((line, idx) => {
+          const raw = line.trim();
+          let digits = raw;
+          if (idx > 0) {
+            let opWord = null;
+            if (/^[+]/.test(raw)) { opWord = operators.plus || 'plus'; digits = raw.slice(1).trim(); }
+            else if (/^[-]/.test(raw)) { opWord = operators.minus; digits = raw.slice(1).trim(); }
+            else if (/^[×x*]/.test(raw)) { opWord = operators.times; digits = raw.slice(1).trim(); }
+            else if (/^[÷/]/.test(raw)) { opWord = operators.divide; digits = raw.slice(1).trim(); }
+            else { opWord = operators.plus || 'plus'; } // implicit addition
+            if (opWord) spokenLines.push(opWord);
+          }
+          digits.replace(/\d/g, (d) => { spokenLines.push(digitWords[d] || d); });
+        });
+        if (spokenLines.length) spokenLines.push(operators.equals || 'equals');
 
         const speakLine = function (index) {
           if (currentSpeechToken !== speechSequenceToken || index >= spokenLines.length) {
@@ -1036,6 +1092,37 @@
         }
       }
 
+      function buildArithmeticDisplay(questionText) {
+        const rawLines = String(questionText).split(/\n+/).map((p) => p.trim()).filter(Boolean);
+        let lines = rawLines;
+        if (rawLines.length === 1) {
+          const parts = rawLines[0].split(/\s*([+\-×÷x])\s*/).filter(Boolean);
+          if (parts.length >= 3 && parts.length % 2 === 1) {
+            lines = [parts[0]];
+            for (let i = 1; i < parts.length; i += 2) lines.push(parts[i] + parts[i + 1]);
+          }
+        }
+        const looksArithmetic = lines.length > 1 && lines.every((line, idx) => (
+          idx === 0 ? !/^[+\-×÷x/]/.test(line) : /^[+\-×÷x/]/.test(line)
+        ));
+        if (looksArithmetic) {
+          const rows = lines.map((line, idx) => {
+            if (idx === 0) return `<div class="practice-arithmetic-line"><span class="practice-arithmetic-operator is-blank"></span><span class="practice-arithmetic-value">${line}</span></div>`;
+            return `<div class="practice-arithmetic-line"><span class="practice-arithmetic-operator">${line.charAt(0)}</span><span class="practice-arithmetic-value">${line.slice(1).trim()}</span></div>`;
+          }).join('');
+          const eq = `<div class="practice-arithmetic-line practice-arithmetic-equals"><span class="practice-arithmetic-operator">=</span><span class="practice-arithmetic-value"></span></div>`;
+          return { html: `<div class="practice-arithmetic-stack">${rows}${eq}</div>`, cssClasses: ['practice-stage-question-arithmetic'], lines };
+        }
+        if (lines.length > 1) {
+          const escaped = lines.map((l) => l.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+          const css = ['practice-stage-question-multiline'];
+          if (lines.length >= 8) css.push('practice-stage-question-multiline-very-dense');
+          else if (lines.length >= 5) css.push('practice-stage-question-multiline-dense');
+          return { html: `<div class="practice-multiline-stack">${escaped.join('<br>')}</div>`, cssClasses: css, lines };
+        }
+        return { html: null, cssClasses: [], lines };
+      }
+
       function renderQuestion() {
         const question = activeQuestions[activeQuestionIndex];
         const hasRemainingQuestions = activeQuestions.some((item) => !questionStatuses[String(item.id)]);
@@ -1111,40 +1198,13 @@
           };
           runFlashStep();
         } else {
-          const arithmeticLines = String(question.question_text)
-            .split(/\n+/)
-            .map((part) => part.trim())
-            .filter(Boolean);
-          const looksArithmetic = arithmeticLines.length > 1 && arithmeticLines.every((line, index) => (
-            index === 0 ? !/^[+\-x/]/.test(line) : /^[+\-x/]/.test(line)
-          ));
-
-          if (looksArithmetic) {
-            const rows = arithmeticLines.map((line, index) => {
-              if (index === 0) {
-                return `<div class="practice-arithmetic-line"><span class="practice-arithmetic-operator is-blank">+</span><span class="practice-arithmetic-value">${line}</span></div>`;
-              }
-              return `<div class="practice-arithmetic-line"><span class="practice-arithmetic-operator">${line.charAt(0)}</span><span class="practice-arithmetic-value">${line.slice(1)}</span></div>`;
-            }).join('');
-            stageQuestion.innerHTML = `<div class="practice-arithmetic-stack">${rows}</div>`;
-            stageQuestion.classList.add('practice-stage-question-arithmetic');
-          } else if (arithmeticLines.length > 1) {
-            const escapedLines = arithmeticLines.map((line) => (
-              String(line)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-            ));
-            stageQuestion.innerHTML = `<div class="practice-multiline-stack">${escapedLines.join('<br>')}</div>`;
-            stageQuestion.classList.add('practice-stage-question-multiline');
-            if (arithmeticLines.length >= 8) {
-              stageQuestion.classList.add('practice-stage-question-multiline-very-dense');
-            } else if (arithmeticLines.length >= 5) {
-              stageQuestion.classList.add('practice-stage-question-multiline-dense');
+          const display = buildArithmeticDisplay(question.question_text);
+          if (display.html) {
+            stageQuestion.innerHTML = display.html;
+            display.cssClasses.forEach((c) => stageQuestion.classList.add(c));
+            if (display.cssClasses.includes('practice-stage-question-multiline')) {
+              window.requestAnimationFrame(function () { fitMultilineQuestion(display.lines); });
             }
-            window.requestAnimationFrame(function () {
-              fitMultilineQuestion(arithmeticLines);
-            });
           } else {
             stageQuestion.textContent = question.question_text;
           }
@@ -1251,6 +1311,26 @@
         dangerZone = !dangerZone;
         window.localStorage.setItem('practiceDangerZone', String(dangerZone));
         syncGauges();
+      });
+
+      function trackClickToValue(trackEl, e, min, max, step, invert) {
+        const rect = trackEl.getBoundingClientRect();
+        const relY = e.clientY - rect.top;
+        let pct = 1 - Math.min(1, Math.max(0, relY / rect.height));
+        const raw = invert ? min + (1 - pct) * (max - min) : min + pct * (max - min);
+        return Math.min(max, Math.max(min, Math.round(raw / step) * step));
+      }
+
+      voiceRateTrack.style.cursor = 'pointer';
+      voiceRateTrack.addEventListener('click', function (e) {
+        const limits = getVoiceRateLimits();
+        setVoiceRate(trackClickToValue(voiceRateTrack, e, limits.min, limits.max, limits.step, false));
+      });
+
+      lineGapTrack.style.cursor = 'pointer';
+      lineGapTrack.addEventListener('click', function (e) {
+        const limits = getLineGapLimits();
+        setLineGap(trackClickToValue(lineGapTrack, e, limits.min, limits.max, limits.step, true));
       });
 
       previewVoiceButton.addEventListener('click', function () {
