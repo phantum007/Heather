@@ -40,7 +40,7 @@
         <p class="stat-meta">Teacher: {{ selected_assignment.teacher.name }}{% if selected_assignment.available_on %} • Available {{ selected_assignment.available_on|date:"d M Y" }}{% endif %}</p>
       </div>
 
-      <section class="speech-settings-card" style="display:none;">
+      <section class="speech-settings-card" >
         <div class="speech-settings-head">
           <div>
             <p class="stat-label" id="speech-settings-eyebrow">Speech Settings</p>
@@ -49,7 +49,7 @@
           <button type="button" class="button ghost" id="practice-preview-voice">Preview Voice</button>
         </div>
 
-        <div class="speech-settings-grid" style="display: none;">
+        <div class="speech-settings-grid">
           <label class="speech-setting-field" for="practice-language">
             <span id="practice-language-label">Language</span>
             <select id="practice-language" class="input">
@@ -60,7 +60,7 @@
             </select>
           </label>
 
-          <label class="speech-setting-field" for="practice-voice" style="display: none;">
+          <label class="speech-setting-field" for="practice-voice">
             <span id="practice-voice-label">Voice</span>
             <select id="practice-voice" class="input">
               <option value="">Default voice</option>
@@ -119,7 +119,7 @@
           <p class="sublesson-focus-title" id="practice-modal-title">Unit</p>
         </div>
         <div class="practice-head-meta">
-          <button type="button" disabled class="button ghost practice-speed-toggle" id="practice-speed-toggle">Speed</button>
+          <button type="button" class="button ghost practice-speed-toggle" id="practice-speed-toggle">Speed</button>
           <span class="practice-timer" id="practice-timer">00:00</span>
           <button type="button" class="practice-close" id="practice-close" aria-label="Close practice">&times;</button>
         </div>
@@ -134,22 +134,42 @@
             </div>
             <button type="button" class="practice-close practice-speed-close" id="practice-speed-close" aria-label="Close speed settings">&times;</button>
           </div>
-          <div class="speech-settings-grid speech-settings-grid-sliders">
-            <label class="speech-setting-field" for="practice-voice-rate">
-              <span class="speech-setting-label-row">
-                <span id="practice-voice-rate-label">Voice Speed</span>
-                <strong id="practice-voice-rate-value">100%</strong>
-              </span>
-              <input id="practice-voice-rate" type="range" min="1" max="150" step="1" value="100">
-            </label>
+          <div class="danger-zone-row">
+            <button type="button" class="danger-zone-toggle" id="danger-zone-toggle">Danger zone - OFF</button>
+          </div>
 
-            <label class="speech-setting-field" for="practice-line-gap">
-              <span class="speech-setting-label-row">
-                <span id="practice-line-gap-label">Line Gap</span>
-                <strong id="practice-line-gap-value">1.6s</strong>
-              </span>
-              <input id="practice-line-gap" type="range" min="400" max="3000" step="100" value="1600">
-            </label>
+          <div class="speed-gauge-cards">
+            <div class="speed-gauge-card">
+              <div class="speed-gauge-card-title"><span id="practice-voice-rate-label">Select voice speed</span></div>
+              <div class="speed-gauge-widget">
+                <div class="speed-gauge-scale"></div>
+                <div class="speed-gauge-track" id="voice-rate-track">
+                  <div class="speed-gauge-fill" id="voice-rate-fill"></div>
+                </div>
+                <div class="speed-gauge-controls">
+                  <button type="button" class="speed-gauge-inc" id="voice-rate-inc" aria-label="Increase voice speed">+</button>
+                  <strong id="practice-voice-rate-value">100%</strong>
+                  <button type="button" class="speed-gauge-dec" id="voice-rate-dec" aria-label="Decrease voice speed">-</button>
+                </div>
+              </div>
+              <input id="practice-voice-rate" type="range" min="70" max="150" step="10" value="100" hidden>
+            </div>
+
+            <div class="speed-gauge-card">
+              <div class="speed-gauge-card-title"><span id="practice-line-gap-label">Select timeout speed</span></div>
+              <div class="speed-gauge-widget">
+                <div class="speed-gauge-scale"></div>
+                <div class="speed-gauge-track" id="line-gap-track">
+                  <div class="speed-gauge-fill" id="line-gap-fill"></div>
+                </div>
+                <div class="speed-gauge-controls">
+                  <button type="button" class="speed-gauge-inc" id="line-gap-inc" aria-label="Increase timeout speed (faster)">+</button>
+                  <strong id="practice-line-gap-value">1.6s</strong>
+                  <button type="button" class="speed-gauge-dec" id="line-gap-dec" aria-label="Decrease timeout speed (slower)">-</button>
+                </div>
+              </div>
+              <input id="practice-line-gap" type="range" min="400" max="3000" step="100" value="1600" hidden>
+            </div>
           </div>
         </div>
       </div>
@@ -279,9 +299,18 @@
       const voiceRateLabel = document.getElementById('practice-voice-rate-label');
       const voiceRateSelect = document.getElementById('practice-voice-rate');
       const voiceRateValue = document.getElementById('practice-voice-rate-value');
+      const voiceRateFill = document.getElementById('voice-rate-fill');
+      const voiceRateTrack = document.getElementById('voice-rate-track');
+      const voiceRateInc = document.getElementById('voice-rate-inc');
+      const voiceRateDec = document.getElementById('voice-rate-dec');
       const lineGapLabel = document.getElementById('practice-line-gap-label');
       const lineGapSelect = document.getElementById('practice-line-gap');
       const lineGapValue = document.getElementById('practice-line-gap-value');
+      const lineGapFill = document.getElementById('line-gap-fill');
+      const lineGapTrack = document.getElementById('line-gap-track');
+      const lineGapInc = document.getElementById('line-gap-inc');
+      const lineGapDec = document.getElementById('line-gap-dec');
+      const dangerZoneToggle = document.getElementById('danger-zone-toggle');
       const answerIcon = document.querySelector('.practice-answer-icon');
       const answerInput = document.getElementById('practice-answer-input');
       const feedback = document.getElementById('practice-feedback');
@@ -296,7 +325,7 @@
       const toListButton = document.getElementById('practice-to-list');
       const nextUnitButton = document.getElementById('practice-next-unit');
 
-      if (!modal || !title || !nav || !stageQuestion || !speechSettingsEyebrow || !speechSettingsTitle || !previewVoiceButton || !speedToggleButton || !speedPanel || !speedPanelBackdrop || !speedEyebrow || !speedTitle || !speedCloseButton || !languageLabel || !languageSelect || !voiceLabel || !voiceSelect || !voiceRateLabel || !voiceRateSelect || !voiceRateValue || !lineGapLabel || !lineGapSelect || !lineGapValue || !answerIcon || !answerInput || !feedback || !checkButton || !timer || !summary || !summaryTitle || !summaryCopy || !summaryScore || !summaryWrong || !summaryTime || !toListButton || !nextUnitButton) {
+      if (!modal || !title || !nav || !stageQuestion || !speechSettingsEyebrow || !speechSettingsTitle || !previewVoiceButton || !speedToggleButton || !speedPanel || !speedPanelBackdrop || !speedEyebrow || !speedTitle || !speedCloseButton || !languageLabel || !languageSelect || !voiceLabel || !voiceSelect || !voiceRateLabel || !voiceRateSelect || !voiceRateValue || !voiceRateFill || !voiceRateInc || !voiceRateDec || !lineGapLabel || !lineGapSelect || !lineGapValue || !lineGapFill || !lineGapInc || !lineGapDec || !dangerZoneToggle || !answerIcon || !answerInput || !feedback || !checkButton || !timer || !summary || !summaryTitle || !summaryCopy || !summaryScore || !summaryWrong || !summaryTime || !toListButton || !nextUnitButton) {
         return;
       }
 
@@ -311,8 +340,8 @@
           speedButton: 'Speed',
           languageLabel: 'Language',
           voiceLabel: 'Voice',
-          voiceSpeedLabel: 'Voice Speed',
-          lineGapLabel: 'Line Gap',
+          voiceSpeedLabel: 'Select voice speed',
+          lineGapLabel: 'Select timeout speed',
           defaultVoice: 'Default voice',
           start: 'Start',
           chooseUnitToBegin: 'Choose a unit to begin.',
@@ -609,7 +638,38 @@
       }
 
       function formatLineGapValue(value) {
-        return `${(Number(value || 1600) / 1000).toFixed(1)}s`;
+        return `${(Number(value || 1600) / 1000).toFixed(2)}s`;
+      }
+
+      let dangerZone = window.localStorage.getItem('practiceDangerZone') === 'true';
+
+      function getVoiceRateLimits() {
+        return { min: 70, max: dangerZone ? 200 : 150, step: 10 };
+      }
+
+      function getLineGapLimits() {
+        return { min: dangerZone ? 100 : 400, max: 3000, step: dangerZone ? 50 : 100 };
+      }
+
+      function syncGauges() {
+        const rLimits = getVoiceRateLimits();
+        const rVal = Math.min(rLimits.max, Math.max(rLimits.min, Number(activeVoiceRate) || 100));
+        const rPct = ((rVal - rLimits.min) / (rLimits.max - rLimits.min)) * 100;
+        voiceRateFill.style.height = `${rPct}%`;
+        voiceRateInc.disabled = rVal >= rLimits.max;
+        voiceRateDec.disabled = rVal <= rLimits.min;
+
+        const gLimits = getLineGapLimits();
+        const gVal = Math.min(gLimits.max, Math.max(gLimits.min, Number(activeLineGap) || 1600));
+        const gPct = ((gLimits.max - gVal) / (gLimits.max - gLimits.min)) * 100;
+        lineGapFill.style.height = `${gPct}%`;
+        lineGapInc.disabled = gVal <= gLimits.min;
+        lineGapDec.disabled = gVal >= gLimits.max;
+
+        if (dangerZoneToggle) {
+          dangerZoneToggle.textContent = dangerZone ? 'Danger zone - ON' : 'Danger zone - OFF';
+          dangerZoneToggle.classList.toggle('is-on', dangerZone);
+        }
       }
 
       function getLanguagePrefix() {
@@ -690,6 +750,7 @@
         lineGapSelect.value = activeLineGap;
         voiceRateValue.textContent = formatVoiceRateValue(activeVoiceRate);
         lineGapValue.textContent = formatLineGapValue(activeLineGap);
+        syncGauges();
         refreshVoiceOptions();
         stageQuestion.textContent = t('selectQuestion');
         answerInput.placeholder = t('typeHere');
@@ -1144,32 +1205,52 @@
         }
       });
 
-      voiceRateSelect.addEventListener('input', function () {
-        activeVoiceRate = voiceRateSelect.value || '0.55';
-        voiceRateValue.textContent = formatVoiceRateValue(activeVoiceRate);
-        window.localStorage.setItem('practiceVoiceRate', activeVoiceRate);
-      });
-
-      voiceRateSelect.addEventListener('change', function () {
-        activeVoiceRate = voiceRateSelect.value || '0.55';
-        window.localStorage.setItem('practiceVoiceRate', activeVoiceRate);
+      function setVoiceRate(newVal) {
+        const limits = getVoiceRateLimits();
+        const clamped = String(Math.min(limits.max, Math.max(limits.min, Math.round(newVal / limits.step) * limits.step)));
+        activeVoiceRate = clamped;
+        voiceRateSelect.value = clamped;
+        voiceRateValue.textContent = formatVoiceRateValue(clamped);
+        window.localStorage.setItem('practiceVoiceRate', clamped);
+        syncGauges();
         if (modal.classList.contains('is-open')) {
           renderQuestion();
         }
-      });
+      }
 
-      lineGapSelect.addEventListener('input', function () {
-        activeLineGap = lineGapSelect.value || '1600';
-        lineGapValue.textContent = formatLineGapValue(activeLineGap);
-        window.localStorage.setItem('practiceLineGap', activeLineGap);
-      });
-
-      lineGapSelect.addEventListener('change', function () {
-        activeLineGap = lineGapSelect.value || '1600';
-        window.localStorage.setItem('practiceLineGap', activeLineGap);
+      function setLineGap(newVal) {
+        const limits = getLineGapLimits();
+        const clamped = String(Math.min(limits.max, Math.max(limits.min, Math.round(newVal / limits.step) * limits.step)));
+        activeLineGap = clamped;
+        lineGapSelect.value = clamped;
+        lineGapValue.textContent = formatLineGapValue(clamped);
+        window.localStorage.setItem('practiceLineGap', clamped);
+        syncGauges();
         if (modal.classList.contains('is-open')) {
           renderQuestion();
         }
+      }
+
+      voiceRateInc.addEventListener('click', function () {
+        setVoiceRate(Number(activeVoiceRate) + getVoiceRateLimits().step);
+      });
+
+      voiceRateDec.addEventListener('click', function () {
+        setVoiceRate(Number(activeVoiceRate) - getVoiceRateLimits().step);
+      });
+
+      lineGapInc.addEventListener('click', function () {
+        setLineGap(Number(activeLineGap) - getLineGapLimits().step);
+      });
+
+      lineGapDec.addEventListener('click', function () {
+        setLineGap(Number(activeLineGap) + getLineGapLimits().step);
+      });
+
+      dangerZoneToggle.addEventListener('click', function () {
+        dangerZone = !dangerZone;
+        window.localStorage.setItem('practiceDangerZone', String(dangerZone));
+        syncGauges();
       });
 
       previewVoiceButton.addEventListener('click', function () {
