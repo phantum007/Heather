@@ -116,7 +116,10 @@ jobs:
         pip install pytest pytest-django pytest-cov
 
     - name: Run migrations
-      run: python manage.py migrate --run-syncdb
+      run: |
+        python manage.py migrate contenttypes
+        python manage.py migrate sessions
+        python manage.py migrate api --fake
 
     - name: Run feature tests
       run: python -m pytest core/features/ ui/features/ -v
