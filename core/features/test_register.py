@@ -5,7 +5,7 @@ from core.models import AppUser, StudentProfile
 
 @pytest.mark.django_db
 def test_register_teacher_returns_201_with_token(api):
-    r = api.post('/api/register/', {
+    r = api.post('/api/register', {
         'name': 'Alice', 'email': 'alice@feature.test',
         'password': 'pw123', 'role': 'teacher',
     }, format='json')
@@ -17,7 +17,7 @@ def test_register_teacher_returns_201_with_token(api):
 
 @pytest.mark.django_db
 def test_register_student_creates_profile(api, grade):
-    r = api.post('/api/register/', {
+    r = api.post('/api/register', {
         'name': 'Bob', 'email': 'bob@feature.test',
         'password': 'pw123', 'role': 'student', 'gradeId': grade.id,
     }, format='json')
@@ -29,7 +29,7 @@ def test_register_student_creates_profile(api, grade):
 
 @pytest.mark.django_db
 def test_register_duplicate_email_returns_400(api, teacher):
-    r = api.post('/api/register/', {
+    r = api.post('/api/register', {
         'name': 'Dup', 'email': teacher.email,
         'password': 'pw123', 'role': 'teacher',
     }, format='json')
@@ -38,7 +38,7 @@ def test_register_duplicate_email_returns_400(api, teacher):
 
 @pytest.mark.django_db
 def test_register_student_without_grade_returns_400(api):
-    r = api.post('/api/register/', {
+    r = api.post('/api/register', {
         'name': 'C', 'email': 'c@feature.test',
         'password': 'pw', 'role': 'student',
     }, format='json')

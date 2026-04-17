@@ -141,12 +141,16 @@ class TestStudentSubmitUnitAnswer:
         assert profile.coins > coins_before
 
     def test_duplicate_question_attempt_returns_400(
-        self, client, student, assignment, unit, curriculum_question
+        self, client, student, assignment, unit, curriculum_question, db
     ):
+        # Add a second question so the attempt stays in_progress after the first submit
+        from core.models import CurriculumQuestion
+        CurriculumQuestion.objects.create(unit=unit, question_text='2+2', answer_text='4', order=2)
         login(client, student.id)
-        self._submit(client, student, assignment, unit, curriculum_question, '99')
-        # same question again in the same attempt
-        r = self._submit(client, student, assignment, unit, curriculum_question, '99')
+        # First submit — attempt is now in_progress (1 of 2 answered)
+        self._submit(client, student, assignment, unit, curriculum_question, '2')
+        # Same question again in the same in-progress attempt → 400
+        r = self._submit(client, student, assignment, unit, curriculum_question, '2')
         assert r.status_code == 400
 
     def test_unit_from_wrong_assignment_returns_400(
