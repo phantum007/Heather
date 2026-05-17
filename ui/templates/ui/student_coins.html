@@ -73,7 +73,7 @@
       <div class="toy-shop-img">
         {% if toy.image %}
           <img src="{{ toy.image }}" alt="{{ toy.name }}"
-               data-img="{{ toy.image }}">
+               data-img="{{ toy.image }}" onerror="this.outerHTML='🧸'">
         {% else %}
           🧸
         {% endif %}
@@ -117,7 +117,7 @@
       <div class="redemp-row">
         <div class="redemp-toy-img">
           {% if r.toy.image %}
-            <img src="{{ r.toy.image }}" alt="{{ r.toy.name }}">
+            <img src="{{ r.toy.image }}" alt="{{ r.toy.name }}" onerror="this.outerHTML='🧸'">
           {% else %}🧸{% endif %}
         </div>
         <div>
