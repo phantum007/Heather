@@ -162,11 +162,11 @@
                 </div>
                 <div class="speed-gauge-controls">
                   <button type="button" class="speed-gauge-inc" id="line-gap-inc" aria-label="Increase timeout speed (faster)">+</button>
-                  <strong id="practice-line-gap-value">1.6s</strong>
+                  <strong id="practice-line-gap-value">0.63s</strong>
                   <button type="button" class="speed-gauge-dec" id="line-gap-dec" aria-label="Decrease timeout speed (slower)">-</button>
                 </div>
               </div>
-              <input id="practice-line-gap" type="range" min="400" max="3000" step="100" value="1600" hidden>
+              <input id="practice-line-gap" type="range" min="50" max="1200" step="50" value="630" hidden>
             </div>
           </div>
         </div>
@@ -389,6 +389,7 @@
             times: 'times',
             minus: 'minus',
             equals: 'equals',
+            point: 'point',
           },
         },
         hi: {
@@ -452,6 +453,7 @@
             times: 'गुणा',
             minus: 'माइनस',
             equals: 'बराबर',
+            point: 'दशमलव',
           },
         },
         es: {
@@ -515,6 +517,7 @@
             times: 'por',
             minus: 'menos',
             equals: 'igual',
+            point: 'punto',
           },
         },
         fr: {
@@ -578,6 +581,7 @@
             times: 'fois',
             minus: 'moins',
             equals: 'égal',
+            point: 'virgule',
           },
         },
       };
@@ -591,7 +595,10 @@
       let activeLanguage = window.localStorage.getItem('practiceLanguage') || 'en';
       let activeVoiceName = window.localStorage.getItem('practiceVoiceName') || '';
       let activeVoiceRate = window.localStorage.getItem('practiceVoiceRate') || '100';
-      let activeLineGap = window.localStorage.getItem('practiceLineGap') || '1600';
+      let activeLineGap = (function () {
+        const stored = Number(window.localStorage.getItem('practiceLineGap'));
+        return String(stored > 0 && stored <= 1200 ? stored : 630);
+      }());
       let availableVoices = [];
       if (!translations[activeLanguage]) {
         activeLanguage = 'en';
@@ -654,7 +661,7 @@
       }
 
       function getLineGapLimits() {
-        return { min: dangerZone ? 100 : 400, max: 3000, step: dangerZone ? 50 : 100 };
+        return { min: dangerZone ? 20 : 50, max: 1200, step: dangerZone ? 20 : 50 };
       }
 
       function syncGauges() {
@@ -666,7 +673,7 @@
         voiceRateDec.disabled = rVal <= rLimits.min;
 
         const gLimits = getLineGapLimits();
-        const gVal = Math.min(gLimits.max, Math.max(gLimits.min, Number(activeLineGap) || 1600));
+        const gVal = Math.min(gLimits.max, Math.max(gLimits.min, Number(activeLineGap) || 630));
         const gPct = ((gLimits.max - gVal) / (gLimits.max - gLimits.min)) * 100;
         lineGapFill.style.height = `${gPct}%`;
         lineGapInc.disabled = gVal <= gLimits.min;
@@ -909,7 +916,7 @@
         }
 
         const rawSpokenLines = String(questionText).split(/\n+/).map((p) => p.trim()).filter(Boolean);
-        // Build digit-by-digit token list with operator between number groups
+        // Build spoken token list: whole numbers as a single token (TTS reads place values), decimal digits individually
         const spokenLines = [];
         rawSpokenLines.forEach((line, idx) => {
           const raw = line.trim();
@@ -923,7 +930,19 @@
             else { opWord = operators.plus || 'plus'; } // implicit addition
             if (opWord) spokenLines.push(opWord);
           }
-          digits.replace(/\d/g, (d) => { spokenLines.push(digitWords[d] || d); });
+          const numStr = digits.replace(/[^\d.]/g, '');
+          if (numStr) {
+            const dotIdx = numStr.indexOf('.');
+            if (dotIdx === -1) {
+              spokenLines.push(numStr);
+            } else {
+              const wholePart = numStr.slice(0, dotIdx);
+              const decPart = numStr.slice(dotIdx + 1);
+              if (wholePart) spokenLines.push(wholePart);
+              spokenLines.push(operators.point || 'point');
+              decPart.split('').forEach((d) => { if (/\d/.test(d)) spokenLines.push(digitWords[d] || d); });
+            }
+          }
         });
         if (spokenLines.length) spokenLines.push(operators.equals || 'equals');
 
@@ -945,7 +964,7 @@
             }
             window.setTimeout(function () {
               speakLine(index + 1);
-            }, Number(activeLineGap) || 1600);
+            }, Number(activeLineGap) || 630);
           };
           window.speechSynthesis.speak(utterance);
         };

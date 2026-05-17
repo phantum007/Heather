@@ -503,6 +503,8 @@ def teacher_add_student(request):
         mother_name = request.POST.get('mother_name', '').strip()
         email = request.POST.get('email', '').strip().lower()
         contact = request.POST.get('contact', '').strip()
+        parent_email = request.POST.get('parent_email', '').strip().lower()
+        parent_address = request.POST.get('parent_address', '').strip()
         password = request.POST.get('password', '').strip()
         grade_id = request.POST.get('grade_id', '').strip()
         profile_photo = request.FILES.get('profile_photo')
@@ -535,6 +537,8 @@ def teacher_add_student(request):
                         father_name=father_name,
                         mother_name=mother_name,
                         contact=contact,
+                        parent_email=parent_email or None,
+                        parent_address=parent_address or None,
                         profile_photo=photo_path,
                     )
             except IntegrityError:
@@ -574,6 +578,8 @@ def teacher_edit_student(request, student_id):
         mother_name = request.POST.get('mother_name', '').strip()
         email = request.POST.get('email', '').strip().lower()
         contact = request.POST.get('contact', '').strip()
+        parent_email = request.POST.get('parent_email', '').strip().lower()
+        parent_address = request.POST.get('parent_address', '').strip()
         password = request.POST.get('password', '').strip()
         grade_id = request.POST.get('grade_id', '').strip()
         profile_photo = request.FILES.get('profile_photo')
@@ -603,6 +609,8 @@ def teacher_edit_student(request, student_id):
                 profile.father_name = father_name
                 profile.mother_name = mother_name
                 profile.contact = contact
+                profile.parent_email = parent_email or None
+                profile.parent_address = parent_address or None
                 new_grade_id = int(grade_id) if grade_id else None
                 previous_grade_id = profile.grade_id
 
