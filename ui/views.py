@@ -1748,24 +1748,48 @@ def teacher_toys(request):
     })
 
 
+def _gcs_client():
+    from google.cloud import storage as gcs
+    credentials_json = getattr(settings, 'GCS_CREDENTIALS_JSON', '')
+    if credentials_json:
+        import json
+        from google.oauth2 import service_account
+        info = json.loads(credentials_json)
+        creds = service_account.Credentials.from_service_account_info(info)
+        return gcs.Client(credentials=creds, project=info['project_id'])
+    return gcs.Client()
+
+
 def _save_toy_image(image_file):
-    toy_dir = os.path.join(settings.MEDIA_ROOT, 'toys')
-    os.makedirs(toy_dir, exist_ok=True)
-    extension = os.path.splitext(image_file.name)[1] or '.jpg'
-    filename = f'{uuid4().hex}{extension}'
-    absolute_path = os.path.join(toy_dir, filename)
-    with open(absolute_path, 'wb+') as dest:
-        for chunk in image_file.chunks():
-            dest.write(chunk)
-    return f'toys/{filename}'
+    bucket_name = getattr(settings, 'GCS_BUCKET_NAME', '')
+    if bucket_name:
+        client = _gcs_client()
+        bucket = client.bucket(bucket_name)
+        ext = os.path.splitext(image_file.name)[1] or '.jpg'
+        blob_name = f'toys/{uuid4().hex}{ext}'
+        blob = bucket.blob(blob_name)
+        blob.upload_from_file(image_file, content_type=image_file.content_type)
+        return f'https://storage.googleapis.com/{bucket_name}/{blob_name}'
+    import base64
+    mime = image_file.content_type or 'image/jpeg'
+    data = b''.join(image_file.chunks())
+    b64 = base64.b64encode(data).decode('ascii')
+    return f'data:{mime};base64,{b64}'
 
 
 def _delete_toy_image(image_path):
-    if not image_path:
+    if not image_path or image_path.startswith('data:'):
         return
-    absolute_path = os.path.join(settings.MEDIA_ROOT, image_path)
-    if os.path.exists(absolute_path):
-        os.remove(absolute_path)
+    bucket_name = getattr(settings, 'GCS_BUCKET_NAME', '')
+    if not bucket_name or 'storage.googleapis.com' not in image_path:
+        return
+    client = _gcs_client()
+    bucket = client.bucket(bucket_name)
+    blob_name = image_path.split(f'{bucket_name}/')[-1]
+    try:
+        bucket.blob(blob_name).delete()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------

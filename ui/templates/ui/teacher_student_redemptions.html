@@ -46,7 +46,7 @@
       <div class="redemp-row">
         <div class="redemp-toy-img">
           {% if r.toy.image %}
-            <img src="{% url 'ui-serve-media' path=r.toy.image %}" alt="{{ r.toy.name }}">
+            <img src="{{ r.toy.image }}" alt="{{ r.toy.name }}">
           {% else %}
             🧸
           {% endif %}

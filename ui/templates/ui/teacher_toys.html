@@ -52,7 +52,7 @@
         <div class="toy-card">
           <div class="toy-card-img">
             {% if toy.image %}
-              <img src="{% url 'ui-serve-media' path=toy.image %}" alt="{{ toy.name }}">
+              <img src="{{ toy.image }}" alt="{{ toy.name }}">
             {% else %}
               🧸
             {% endif %}

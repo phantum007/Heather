@@ -72,8 +72,8 @@
          data-cost="{{ toy.coin_value }}">
       <div class="toy-shop-img">
         {% if toy.image %}
-          <img src="{% url 'ui-serve-media' path=toy.image %}" alt="{{ toy.name }}"
-               data-img="{% url 'ui-serve-media' path=toy.image %}">
+          <img src="{{ toy.image }}" alt="{{ toy.name }}"
+               data-img="{{ toy.image }}">
         {% else %}
           🧸
         {% endif %}
@@ -88,7 +88,7 @@
                   data-toy-id="{{ toy.id }}"
                   data-toy-name="{{ toy.name|escapejs }}"
                   data-toy-cost="{{ toy.coin_value }}"
-                  data-toy-img="{% if toy.image %}{% url 'ui-serve-media' path=toy.image %}{% endif %}"
+                  data-toy-img="{{ toy.image }}"
                   onclick="openCheckout(this)">
             🛒 Add to Cart
           </button>
@@ -117,7 +117,7 @@
       <div class="redemp-row">
         <div class="redemp-toy-img">
           {% if r.toy.image %}
-            <img src="{% url 'ui-serve-media' path=r.toy.image %}" alt="{{ r.toy.name }}">
+            <img src="{{ r.toy.image }}" alt="{{ r.toy.name }}">
           {% else %}🧸{% endif %}
         </div>
         <div>
