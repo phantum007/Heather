@@ -56,7 +56,7 @@
 <div class="prog-header">
   <div class="prog-avatar">
     {% if profile.profile_photo %}
-      <img src="{% url 'ui-serve-media' path=profile.profile_photo %}" alt="">
+      <img src="{{ profile.profile_photo }}" alt="" onerror="this.remove()">
     {% else %}
       {{ profile.first_name|default:profile.user.name|first|default:'S' }}
     {% endif %}

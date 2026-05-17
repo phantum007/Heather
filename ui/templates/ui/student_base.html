@@ -18,7 +18,7 @@
     <div class="profile-card">
       <div class="avatar">
         {% if student_profile and student_profile.profile_photo %}
-          <img src="{% url 'ui-serve-media' path=student_profile.profile_photo %}" alt="{{ current_user.name }}" class="avatar-image">
+          <img src="{{ student_profile.profile_photo }}" alt="{{ current_user.name }}" class="avatar-image" onerror="this.remove()">
         {% else %}
           {{ current_user.name|first|default:'S' }}
         {% endif %}

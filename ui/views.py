@@ -171,20 +171,34 @@ def _curriculum_grade_tree_queryset():
 def _save_profile_photo(profile_photo):
     if not profile_photo:
         return ''
-
-    photo_dir = os.path.join(settings.MEDIA_ROOT, 'student_profiles')
-    os.makedirs(photo_dir, exist_ok=True)
-    extension = os.path.splitext(profile_photo.name)[1] or '.jpg'
-    filename = f'{uuid4().hex}{extension}'
-    absolute_path = os.path.join(photo_dir, filename)
-    with open(absolute_path, 'wb+') as destination:
-        for chunk in profile_photo.chunks():
-            destination.write(chunk)
-    return f'student_profiles/{filename}'
+    bucket_name = getattr(settings, 'GCS_BUCKET_NAME', '')
+    if bucket_name:
+        client = _gcs_client()
+        bucket = client.bucket(bucket_name)
+        ext = os.path.splitext(profile_photo.name)[1] or '.jpg'
+        blob_name = f'student_profiles/{uuid4().hex}{ext}'
+        blob = bucket.blob(blob_name)
+        blob.upload_from_file(profile_photo, content_type=profile_photo.content_type)
+        return f'https://storage.googleapis.com/{bucket_name}/{blob_name}'
+    import base64
+    mime = profile_photo.content_type or 'image/jpeg'
+    data = b''.join(profile_photo.chunks())
+    b64 = base64.b64encode(data).decode('ascii')
+    return f'data:{mime};base64,{b64}'
 
 
 def _delete_profile_photo(photo_path):
-    if not photo_path:
+    if not photo_path or photo_path.startswith('data:'):
+        return
+    bucket_name = getattr(settings, 'GCS_BUCKET_NAME', '')
+    if bucket_name and 'storage.googleapis.com' in photo_path:
+        client = _gcs_client()
+        bucket = client.bucket(bucket_name)
+        blob_name = photo_path.split(f'{bucket_name}/')[-1]
+        try:
+            bucket.blob(blob_name).delete()
+        except Exception:
+            pass
         return
     absolute_path = os.path.join(settings.MEDIA_ROOT, photo_path)
     if os.path.exists(absolute_path):
