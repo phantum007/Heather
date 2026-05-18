@@ -23,7 +23,7 @@
 <div class="redemp-header">
   <div class="redemp-avatar">
     {% if profile.profile_photo %}
-      <img src="{% url 'ui-serve-media' path=profile.profile_photo %}" alt="">
+      <img src="{{ profile.profile_photo }}" alt="" onerror="this.remove()">
     {% else %}
       {{ profile.first_name|default:profile.user.name|first|default:'S' }}
     {% endif %}
@@ -46,7 +46,7 @@
       <div class="redemp-row">
         <div class="redemp-toy-img">
           {% if r.toy.image %}
-            <img src="{% url 'ui-serve-media' path=r.toy.image %}" alt="{{ r.toy.name }}">
+            <img src="{{ r.toy.image }}" alt="{{ r.toy.name }}" onerror="this.outerHTML='🧸'">
           {% else %}
             🧸
           {% endif %}

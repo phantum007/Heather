@@ -9,7 +9,7 @@
           {% include 'ui/partials/brand_logo.svg' %}
         </div>
         <div>
-          <h1>Abacus Mental</h1>
+          <h1>AbacusBlaze</h1>
         </div>
       </div>
       <button type="button" class="sidebar-toggle" id="student-sidebar-toggle" aria-label="Toggle sidebar">≡</button>
@@ -18,7 +18,7 @@
     <div class="profile-card">
       <div class="avatar">
         {% if student_profile and student_profile.profile_photo %}
-          <img src="{% url 'ui-serve-media' path=student_profile.profile_photo %}" alt="{{ current_user.name }}" class="avatar-image">
+          <img src="{{ student_profile.profile_photo }}" alt="{{ current_user.name }}" class="avatar-image" onerror="this.remove()">
         {% else %}
           {{ current_user.name|first|default:'S' }}
         {% endif %}

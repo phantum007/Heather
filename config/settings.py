@@ -67,7 +67,7 @@ def _csv_env(name: str, default_values: list[str]) -> list[str]:
 
 def _database_settings_from_url(database_url: str) -> dict:
     parsed = urlparse(database_url)
-    query_options = {key: value for key, value in parse_qsl(parsed.query, keep_blank_values=True)}
+    query_options = dict(parse_qsl(parsed.query, keep_blank_values=True))
     port = str(parsed.port or 5432)
 
     return {
@@ -115,7 +115,9 @@ DEBUG = _env_flag('DEBUG')
 
 app_domain = _normalize_origin(os.getenv('APP_DOMAIN', ''))
 app_url = _normalize_origin(os.getenv('APP_URL', ''))
-default_csrf_trusted_origins = [value for value in [app_domain, app_url] if value.startswith('https://')]
+default_csrf_trusted_origins = [
+    v for v in [app_domain, app_url] if v.startswith('https://')
+]
 CSRF_TRUSTED_ORIGINS = _csv_env('CSRF_TRUSTED_ORIGINS', default_csrf_trusted_origins)
 
 default_allowed_hosts = ['.run.app', 'localhost', '127.0.0.1']
@@ -176,11 +178,15 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = str(BASE_DIR / 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = True
+
+GCS_BUCKET_NAME = os.getenv('GCS_BUCKET_NAME', '')
+GCS_CREDENTIALS_JSON = os.getenv('GCS_CREDENTIALS_JSON', '')
 
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRY = _parse_jwt_expiry(os.getenv('JWT_EXPIRES_IN', '1d'))
@@ -195,7 +201,7 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Abacus Platform API',
-    'DESCRIPTION': 'Django REST API for the Abacus practice management platform.',
+    'DESCRIPTION': 'Django REST API for the Abacus practice management platform.',  # noqa: E501
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'SCHEMA_PATH_PREFIX': r'/api',

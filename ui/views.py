@@ -171,20 +171,34 @@ def _curriculum_grade_tree_queryset():
 def _save_profile_photo(profile_photo):
     if not profile_photo:
         return ''
-
-    photo_dir = os.path.join(settings.MEDIA_ROOT, 'student_profiles')
-    os.makedirs(photo_dir, exist_ok=True)
-    extension = os.path.splitext(profile_photo.name)[1] or '.jpg'
-    filename = f'{uuid4().hex}{extension}'
-    absolute_path = os.path.join(photo_dir, filename)
-    with open(absolute_path, 'wb+') as destination:
-        for chunk in profile_photo.chunks():
-            destination.write(chunk)
-    return f'student_profiles/{filename}'
+    bucket_name = getattr(settings, 'GCS_BUCKET_NAME', '')
+    if bucket_name:
+        client = _gcs_client()
+        bucket = client.bucket(bucket_name)
+        ext = os.path.splitext(profile_photo.name)[1] or '.jpg'
+        blob_name = f'student_profiles/{uuid4().hex}{ext}'
+        blob = bucket.blob(blob_name)
+        blob.upload_from_file(profile_photo, content_type=profile_photo.content_type)
+        return f'https://storage.googleapis.com/{bucket_name}/{blob_name}'
+    import base64
+    mime = profile_photo.content_type or 'image/jpeg'
+    data = b''.join(profile_photo.chunks())
+    b64 = base64.b64encode(data).decode('ascii')
+    return f'data:{mime};base64,{b64}'
 
 
 def _delete_profile_photo(photo_path):
-    if not photo_path:
+    if not photo_path or photo_path.startswith('data:'):
+        return
+    bucket_name = getattr(settings, 'GCS_BUCKET_NAME', '')
+    if bucket_name and 'storage.googleapis.com' in photo_path:
+        client = _gcs_client()
+        bucket = client.bucket(bucket_name)
+        blob_name = photo_path.split(f'{bucket_name}/')[-1]
+        try:
+            bucket.blob(blob_name).delete()
+        except Exception:
+            pass
         return
     absolute_path = os.path.join(settings.MEDIA_ROOT, photo_path)
     if os.path.exists(absolute_path):
@@ -503,6 +517,8 @@ def teacher_add_student(request):
         mother_name = request.POST.get('mother_name', '').strip()
         email = request.POST.get('email', '').strip().lower()
         contact = request.POST.get('contact', '').strip()
+        parent_email = request.POST.get('parent_email', '').strip().lower()
+        parent_address = request.POST.get('parent_address', '').strip()
         password = request.POST.get('password', '').strip()
         grade_id = request.POST.get('grade_id', '').strip()
         profile_photo = request.FILES.get('profile_photo')
@@ -535,6 +551,8 @@ def teacher_add_student(request):
                         father_name=father_name,
                         mother_name=mother_name,
                         contact=contact,
+                        parent_email=parent_email or None,
+                        parent_address=parent_address or None,
                         profile_photo=photo_path,
                     )
             except IntegrityError:
@@ -574,6 +592,8 @@ def teacher_edit_student(request, student_id):
         mother_name = request.POST.get('mother_name', '').strip()
         email = request.POST.get('email', '').strip().lower()
         contact = request.POST.get('contact', '').strip()
+        parent_email = request.POST.get('parent_email', '').strip().lower()
+        parent_address = request.POST.get('parent_address', '').strip()
         password = request.POST.get('password', '').strip()
         grade_id = request.POST.get('grade_id', '').strip()
         profile_photo = request.FILES.get('profile_photo')
@@ -603,6 +623,8 @@ def teacher_edit_student(request, student_id):
                 profile.father_name = father_name
                 profile.mother_name = mother_name
                 profile.contact = contact
+                profile.parent_email = parent_email or None
+                profile.parent_address = parent_address or None
                 new_grade_id = int(grade_id) if grade_id else None
                 previous_grade_id = profile.grade_id
 
@@ -1740,24 +1762,48 @@ def teacher_toys(request):
     })
 
 
+def _gcs_client():
+    from google.cloud import storage as gcs
+    credentials_json = getattr(settings, 'GCS_CREDENTIALS_JSON', '')
+    if credentials_json:
+        import json
+        from google.oauth2 import service_account
+        info = json.loads(credentials_json)
+        creds = service_account.Credentials.from_service_account_info(info)
+        return gcs.Client(credentials=creds, project=info['project_id'])
+    return gcs.Client()
+
+
 def _save_toy_image(image_file):
-    toy_dir = os.path.join(settings.MEDIA_ROOT, 'toys')
-    os.makedirs(toy_dir, exist_ok=True)
-    extension = os.path.splitext(image_file.name)[1] or '.jpg'
-    filename = f'{uuid4().hex}{extension}'
-    absolute_path = os.path.join(toy_dir, filename)
-    with open(absolute_path, 'wb+') as dest:
-        for chunk in image_file.chunks():
-            dest.write(chunk)
-    return f'toys/{filename}'
+    bucket_name = getattr(settings, 'GCS_BUCKET_NAME', '')
+    if bucket_name:
+        client = _gcs_client()
+        bucket = client.bucket(bucket_name)
+        ext = os.path.splitext(image_file.name)[1] or '.jpg'
+        blob_name = f'toys/{uuid4().hex}{ext}'
+        blob = bucket.blob(blob_name)
+        blob.upload_from_file(image_file, content_type=image_file.content_type)
+        return f'https://storage.googleapis.com/{bucket_name}/{blob_name}'
+    import base64
+    mime = image_file.content_type or 'image/jpeg'
+    data = b''.join(image_file.chunks())
+    b64 = base64.b64encode(data).decode('ascii')
+    return f'data:{mime};base64,{b64}'
 
 
 def _delete_toy_image(image_path):
-    if not image_path:
+    if not image_path or image_path.startswith('data:'):
         return
-    absolute_path = os.path.join(settings.MEDIA_ROOT, image_path)
-    if os.path.exists(absolute_path):
-        os.remove(absolute_path)
+    bucket_name = getattr(settings, 'GCS_BUCKET_NAME', '')
+    if not bucket_name or 'storage.googleapis.com' not in image_path:
+        return
+    client = _gcs_client()
+    bucket = client.bucket(bucket_name)
+    blob_name = image_path.split(f'{bucket_name}/')[-1]
+    try:
+        bucket.blob(blob_name).delete()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------

@@ -44,11 +44,24 @@
     <label class="field">
       <span>Email</span>
       <input class="input" type="email" name="email" value="{{ profile.user.email }}" required>
+      <small class="field-note">Student login email.</small>
     </label>
 
     <label class="field">
-      <span>Contact</span>
+      <span>Parent Contact</span>
       <input class="input" type="text" name="contact" value="{{ profile.contact|default:'' }}" required>
+    </label>
+
+    <label class="field">
+      <span>Parent Email</span>
+      <input class="input" type="email" name="parent_email" value="{{ profile.parent_email|default:'' }}">
+      <small class="field-note">Optional. Parent or guardian email address.</small>
+    </label>
+
+    <label class="field">
+      <span>Parent Address</span>
+      <textarea class="input" name="parent_address" rows="2">{{ profile.parent_address|default:'' }}</textarea>
+      <small class="field-note">Optional. Home or mailing address.</small>
     </label>
 
     <label class="field">

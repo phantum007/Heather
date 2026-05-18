@@ -40,6 +40,8 @@ class StudentProfile(models.Model):
     father_name = models.CharField(max_length=120, null=True, blank=True)
     mother_name = models.CharField(max_length=120, null=True, blank=True)
     contact = models.CharField(max_length=40, null=True, blank=True)
+    parent_email = models.EmailField(max_length=180, null=True, blank=True)
+    parent_address = models.TextField(null=True, blank=True)
     profile_photo = models.TextField(null=True, blank=True)
     coins = models.PositiveIntegerField(default=0)
 
