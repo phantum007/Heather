@@ -1,0 +1,102 @@
+CLIENT TEST CHECKLIST
+
+1. Login and Access
+
+- Log in as a teacher with valid credentials.
+Expected: Teacher dashboard should open successfully.
+
+- Log in as a student with valid credentials.
+Expected: Student assignments page should open successfully.
+
+- Try logging in with an incorrect password.
+Expected: Login should fail and an error message should appear.
+
+- Log out after signing in.
+Expected: User should be redirected to the login page.
+
+- Try opening protected pages without logging in.
+Expected: System should redirect to the login page.
+
+- Check role access control.
+Expected: Students should not be able to open teacher pages, and teachers should not be able to open student-only pages.
+
+2. Teacher Functions
+
+- Open the student list page.
+Expected: Student list should load correctly.
+
+- Add a new student with valid details.
+Expected: Student should be created successfully.
+
+- Try adding a student with missing required fields.
+Expected: System should show validation errors and should not create the student.
+
+- Try adding a student with an email that already exists.
+Expected: System should reject the duplicate email.
+
+- Update the teacher profile.
+Expected: Changes should save successfully.
+
+3. Assignment Management
+
+- Open the create assignment page.
+Expected: Students and lessons should be visible.
+
+- Create an assignment with valid details.
+Expected: Assignment should be created successfully.
+
+- Try creating an assignment with incomplete or invalid details.
+Expected: System should not allow the assignment to be created.
+
+4. Student Functions
+
+- Open the student dashboard.
+Expected: Student details, grade, and work information should be visible.
+
+- Open the student assignments page.
+Expected: Assigned work should be visible.
+
+- Submit valid answers for an assignment.
+Expected: Submission should succeed and score or percentage should be shown.
+
+- Submit blank or invalid answers.
+Expected: System should reject the submission.
+
+5. Assignment Progression
+
+- Check whether the next assignment remains locked until the previous one is completed.
+Expected: Next assignment should stay locked until required work is finished.
+
+- Complete the previous assignment and check again.
+Expected: Next assignment should unlock after successful completion.
+
+6. Coins and Rewards
+
+- Open the student coins page.
+Expected: Coin balance and reward options should be visible.
+
+- Redeem a reward when enough coins are available.
+Expected: Redemption should succeed and coins should be reduced.
+
+- Try redeeming a reward without enough coins.
+Expected: System should not allow redemption.
+
+- Open the teacher toys or rewards page.
+Expected: Existing rewards should display correctly.
+
+- Add a new reward with a valid coin value.
+Expected: Reward should be added successfully.
+
+- Try adding a reward with an invalid coin value.
+Expected: System should show an error and should not add the reward.
+
+- Delete a reward item.
+Expected: Reward should be removed successfully.
+
+7. Answer Validation
+
+- Check equivalent numeric answers such as 5 and 5.0, or 1234 and 1,234.
+Expected: These should be treated as correct answers.
+
+- Check text answers with different uppercase and lowercase letters.
+Expected: Answers should still be treated as correct if the text is the same.
