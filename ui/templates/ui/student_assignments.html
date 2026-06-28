@@ -166,7 +166,7 @@
                   <button type="button" class="speed-gauge-dec" id="line-gap-dec" aria-label="Decrease timeout speed (slower)">-</button>
                 </div>
               </div>
-              <input id="practice-line-gap" type="range" min="50" max="1200" step="50" value="630" hidden>
+              <input id="practice-line-gap" type="range" min="10" max="1200" step="10" value="630" hidden>
             </div>
           </div>
         </div>
@@ -618,6 +618,7 @@
       let flashTimeoutId = null;
       let flashSequenceToken = 0;
       let speechSequenceToken = 0;
+      let speechStartTimer = null;
 
       function getSelectedUnitButton() {
         return Array.from(unitButtons).find((button) => button.dataset.unitId === String(activeUnitId));
@@ -666,7 +667,7 @@
       }
 
       function getLineGapLimits() {
-        return { min: dangerZone ? 20 : 50, max: 1200, step: dangerZone ? 20 : 50 };
+        return { min: 10, max: 1200, step: 10 };
       }
 
       function syncGauges() {
@@ -880,6 +881,8 @@
       }
 
       function stopSpeech() {
+        window.clearTimeout(speechStartTimer);
+        speechStartTimer = null;
         speechSequenceToken += 1;
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
@@ -975,7 +978,11 @@
           window.speechSynthesis.speak(utterance);
         };
 
-        speakLine(0);
+        speechStartTimer = window.setTimeout(function () {
+          if (currentSpeechToken === speechSequenceToken) {
+            speakLine(0);
+          }
+        }, 400);
       }
 
       function showPracticeStage() {
@@ -1319,19 +1326,37 @@
         }
       }
 
-      voiceRateInc.addEventListener('click', function () {
+      function bindPressAndHold(btn, action) {
+        let interval = null;
+        function start() {
+          action();
+          interval = setInterval(action, 80);
+        }
+        function stop() {
+          clearInterval(interval);
+          interval = null;
+        }
+        btn.addEventListener('mousedown', start);
+        btn.addEventListener('touchstart', function (e) { e.preventDefault(); start(); }, { passive: false });
+        btn.addEventListener('mouseup', stop);
+        btn.addEventListener('mouseleave', stop);
+        btn.addEventListener('touchend', stop);
+        btn.addEventListener('touchcancel', stop);
+      }
+
+      bindPressAndHold(voiceRateInc, function () {
         setVoiceRate(Number(activeVoiceRate) + getVoiceRateLimits().step);
       });
 
-      voiceRateDec.addEventListener('click', function () {
+      bindPressAndHold(voiceRateDec, function () {
         setVoiceRate(Number(activeVoiceRate) - getVoiceRateLimits().step);
       });
 
-      lineGapInc.addEventListener('click', function () {
+      bindPressAndHold(lineGapInc, function () {
         setLineGap(Number(activeLineGap) - getLineGapLimits().step);
       });
 
-      lineGapDec.addEventListener('click', function () {
+      bindPressAndHold(lineGapDec, function () {
         setLineGap(Number(activeLineGap) + getLineGapLimits().step);
       });
 
