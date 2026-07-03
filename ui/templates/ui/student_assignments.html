@@ -210,12 +210,12 @@
 
   <div class="unit-done-overlay" id="unit-done-overlay" hidden>
     <div class="unit-done-dialog">
-      <div class="unit-done-icon">🌟</div>
-      <h3 class="unit-done-title">You already cleared this!</h3>
-      <p class="unit-done-copy">Great job — you've already passed this unit. Want to practise it again anyway?</p>
+      <div class="unit-done-icon">⚠️</div>
+      <h3 class="unit-done-title">You've already passed this unit!</h3>
+      <p class="unit-done-copy"><strong>Warning:</strong> If you attempt this unit again, your current score and progress will be <strong>permanently lost</strong> and replaced with the new attempt. This cannot be undone.</p>
       <div class="unit-done-actions">
-        <button type="button" class="button ghost" id="unit-done-cancel">No, go back</button>
-        <button type="button" class="button primary" id="unit-done-confirm">Yes, practise again</button>
+        <button type="button" class="button primary" id="unit-done-cancel">Keep my progress</button>
+        <button type="button" class="button ghost unit-done-danger" id="unit-done-confirm">Retry and lose progress</button>
       </div>
     </div>
   </div>
