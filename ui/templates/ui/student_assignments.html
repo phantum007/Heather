@@ -208,6 +208,18 @@
     </div>
   </div>
 
+  <div class="unit-done-overlay" id="unit-done-overlay" hidden>
+    <div class="unit-done-dialog">
+      <div class="unit-done-icon">🌟</div>
+      <h3 class="unit-done-title">You already cleared this!</h3>
+      <p class="unit-done-copy">Great job — you've already passed this unit. Want to practise it again anyway?</p>
+      <div class="unit-done-actions">
+        <button type="button" class="button ghost" id="unit-done-cancel">No, go back</button>
+        <button type="button" class="button primary" id="unit-done-confirm">Yes, practise again</button>
+      </div>
+    </div>
+  </div>
+
   {% for track in lesson_tracks %}
     {% for unit in track.units %}
       <script type="application/json" id="unit-questions-{{ unit.id }}">
@@ -1412,7 +1424,44 @@
       speedCloseButton.addEventListener('click', closeSpeedPanel);
       speedPanelBackdrop.addEventListener('click', closeSpeedPanel);
 
+      const unitDoneOverlay = document.getElementById('unit-done-overlay');
+      const unitDoneConfirm = document.getElementById('unit-done-confirm');
+      const unitDoneCancel = document.getElementById('unit-done-cancel');
+      let pendingUnitArgs = null;
+
+      function showUnitDonePrompt(args) {
+        pendingUnitArgs = args;
+        unitDoneOverlay.removeAttribute('hidden');
+      }
+
+      function hideUnitDonePrompt() {
+        unitDoneOverlay.setAttribute('hidden', '');
+        pendingUnitArgs = null;
+      }
+
+      unitDoneConfirm.addEventListener('click', function () {
+        if (pendingUnitArgs) {
+          const args = pendingUnitArgs;
+          hideUnitDonePrompt();
+          startUnit(...args);
+        }
+      });
+
+      unitDoneCancel.addEventListener('click', hideUnitDonePrompt);
+      unitDoneOverlay.addEventListener('click', function (e) {
+        if (e.target === unitDoneOverlay) hideUnitDonePrompt();
+      });
+
       function openUnit(unitId, unitPath, practiceMode, audioMode) {
+        const preCheck = loadUnitAttempts(unitId);
+        if (preCheck.status === 'passed') {
+          showUnitDonePrompt([unitId, unitPath, practiceMode, audioMode]);
+          return;
+        }
+        startUnit(unitId, unitPath, practiceMode, audioMode);
+      }
+
+      function startUnit(unitId, unitPath, practiceMode, audioMode) {
         const payloadId = unitId;
         const payloadElement = document.getElementById(`unit-questions-${payloadId}`);
         activeQuestions = payloadElement ? JSON.parse(payloadElement.textContent) : [];
@@ -1649,6 +1698,21 @@
         loadVoices();
         if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
           window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+        // Brave blocks getVoices() initially — poll until voices arrive (up to 3s)
+        if (!availableVoices.length) {
+          let voicePollAttempts = 0;
+          const voicePollId = window.setInterval(function () {
+            voicePollAttempts += 1;
+            const voices = window.speechSynthesis.getVoices() || [];
+            if (voices.length || voicePollAttempts >= 6) {
+              window.clearInterval(voicePollId);
+              if (voices.length) {
+                availableVoices = voices;
+                refreshVoiceOptions();
+              }
+            }
+          }, 500);
         }
       }
       applyLanguage();
