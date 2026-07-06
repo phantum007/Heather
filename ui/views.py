@@ -1871,3 +1871,63 @@ def student_redeem_toy(request):
         'coins_remaining': profile.coins,
         'toy_name': toy.name,
     })
+
+
+# ---------------------------------------------------------------------------
+# Google Cloud TTS demo
+# ---------------------------------------------------------------------------
+
+def tts_demo(request):
+    return render(request, 'ui/tts_demo.html')
+
+
+@require_http_methods(['POST'])
+def tts_synthesize(request):
+    import json
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    text = (body.get('text') or '').strip()
+    voice_name = (body.get('voice') or 'en-GB-Neural2-B').strip()
+    speaking_rate = float(body.get('rate') or 1.0)
+
+    if not text:
+        return JsonResponse({'error': 'text is required'}, status=400)
+    if len(text) > 500:
+        return JsonResponse({'error': 'text too long (max 500 chars)'}, status=400)
+
+    try:
+        from google.cloud import texttospeech
+        credentials_json = getattr(settings, 'GCS_CREDENTIALS_JSON', '')
+        if credentials_json:
+            import json as _json
+            from google.oauth2 import service_account
+            info = _json.loads(credentials_json)
+            creds = service_account.Credentials.from_service_account_info(info)
+            client = texttospeech.TextToSpeechClient(credentials=creds)
+        else:
+            client = texttospeech.TextToSpeechClient()
+
+        language_code = '-'.join(voice_name.split('-')[:2])
+        synthesis_input = texttospeech.SynthesisInput(text=text)
+        voice_params = texttospeech.VoiceSelectionParams(
+            language_code=language_code,
+            name=voice_name,
+        )
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=speaking_rate,
+        )
+        response = client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice_params,
+            audio_config=audio_config,
+        )
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+    import base64
+    audio_b64 = base64.b64encode(response.audio_content).decode('ascii')
+    return JsonResponse({'audio': f'data:audio/mpeg;base64,{audio_b64}'})
