@@ -1892,6 +1892,7 @@ def tts_synthesize(request):
     text = (body.get('text') or '').strip()
     voice_name = (body.get('voice') or 'en-GB-Neural2-B').strip()
     speaking_rate = float(body.get('rate') or 1.0)
+    line_gap_ms = max(0, min(3000, int(body.get('line_gap_ms') or 0)))
 
     if not text:
         return JsonResponse({'error': 'text is required'}, status=400)
@@ -1911,7 +1912,17 @@ def tts_synthesize(request):
             client = texttospeech.TextToSpeechClient()
 
         language_code = '-'.join(voice_name.split('-')[:2])
-        synthesis_input = texttospeech.SynthesisInput(text=text)
+
+        if line_gap_ms > 0:
+            import html as _html
+            lines = [l.strip() for l in text.split('\n') if l.strip()]
+            break_tag = f'<break time="{line_gap_ms}ms"/>'
+            ssml_body = break_tag.join(_html.escape(l) for l in lines)
+            ssml = f'<speak>{ssml_body}</speak>'
+            synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
+        else:
+            synthesis_input = texttospeech.SynthesisInput(text=text)
+
         voice_params = texttospeech.VoiceSelectionParams(
             language_code=language_code,
             name=voice_name,

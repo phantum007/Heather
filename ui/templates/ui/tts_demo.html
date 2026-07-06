@@ -202,6 +202,13 @@
   </div>
 
   <div class="field">
+    <label>Line gap (pause between lines) — <span id="gap-display">0.5s</span></label>
+    <div class="rate-row">
+      <input type="range" id="tts-gap" min="0" max="3000" step="100" value="500">
+    </div>
+  </div>
+
+  <div class="field">
     <label>Quick presets</label>
     <div class="presets">
       <button class="preset-btn" data-text="234&#10;+111&#10;+456">Addition</button>
@@ -250,6 +257,8 @@
   const voiceEl = document.getElementById('tts-voice');
   const rateEl = document.getElementById('tts-rate');
   const rateDisplay = document.getElementById('rate-display');
+  const gapEl = document.getElementById('tts-gap');
+  const gapDisplay = document.getElementById('gap-display');
   const speakBtn = document.getElementById('speak-btn');
   const speakLabel = document.getElementById('speak-label');
   const statusEl = document.getElementById('status');
@@ -258,6 +267,11 @@
 
   rateEl.addEventListener('input', function () {
     rateDisplay.textContent = parseFloat(rateEl.value).toFixed(1) + '×';
+  });
+
+  gapEl.addEventListener('input', function () {
+    const ms = parseInt(gapEl.value);
+    gapDisplay.textContent = ms === 0 ? 'off' : (ms / 1000).toFixed(1) + 's';
   });
 
   document.querySelectorAll('.preset-btn').forEach(function (btn) {
@@ -288,7 +302,7 @@
       const res = await fetch('/tts-demo/synthesize/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-        body: JSON.stringify({ text, voice: voiceEl.value, rate: parseFloat(rateEl.value) }),
+        body: JSON.stringify({ text, voice: voiceEl.value, rate: parseFloat(rateEl.value), line_gap_ms: parseInt(gapEl.value) }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Server error');
