@@ -14,6 +14,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils._os import safe_join
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from core.answer_utils import answers_match, truncate_numeric_precision
@@ -1881,6 +1882,7 @@ def tts_demo(request):
     return render(request, 'ui/tts_demo.html')
 
 
+@csrf_exempt
 @require_http_methods(['POST'])
 def tts_synthesize(request):
     import json
