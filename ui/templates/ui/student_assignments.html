@@ -1630,6 +1630,8 @@
           }
         }
 
+        checkButton.disabled = true;
+
         const formData = new URLSearchParams();
         formData.set('assignment_id', String(selectedAssignmentId));
         formData.set('unit_id', String(activeUnitId));
@@ -1650,6 +1652,7 @@
             if (!ok) {
               feedback.textContent = data.message || t('unableToSave');
               feedback.className = 'practice-feedback incorrect';
+              checkButton.disabled = false;
               return;
             }
 
@@ -1691,6 +1694,7 @@
           .catch(() => {
             feedback.textContent = t('unableToSave');
             feedback.className = 'practice-feedback incorrect';
+            checkButton.disabled = false;
           });
       });
 
