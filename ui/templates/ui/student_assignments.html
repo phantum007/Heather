@@ -53,10 +53,11 @@
           <label class="speech-setting-field" for="practice-language">
             <span id="practice-language-label">Language</span>
             <select id="practice-language" class="input">
-              <option value="en">English</option>
-              <option value="hi">Hindi</option>
-              <option value="es">Spanish</option>
-              <option value="fr">French</option>
+              <option value="en-GB">English (UK)</option>
+              <option value="en-US">English (US)</option>
+              <option value="hi-IN">Hindi</option>
+              <option value="es-ES">Spanish</option>
+              <option value="fr-FR">French</option>
             </select>
           </label>
 
@@ -624,22 +625,52 @@
       let questionStatuses = {};
       let activePracticeMode = 'default';
       let activeAudioMode = false;
-      let activeLanguage = window.localStorage.getItem('practiceLanguage') || 'en';
+      const GCLOUD_VOICES = {
+        'en-GB': [
+          { value: 'en-GB-Neural2-B', label: 'Neural2-B — Male' },
+          { value: 'en-GB-Neural2-A', label: 'Neural2-A — Female' },
+          { value: 'en-GB-Neural2-C', label: 'Neural2-C — Female' },
+          { value: 'en-GB-Neural2-D', label: 'Neural2-D — Male' },
+        ],
+        'en-US': [
+          { value: 'en-US-Neural2-D', label: 'Neural2-D — Male' },
+          { value: 'en-US-Neural2-A', label: 'Neural2-A — Male' },
+          { value: 'en-US-Neural2-C', label: 'Neural2-C — Female' },
+          { value: 'en-US-Neural2-F', label: 'Neural2-F — Female' },
+        ],
+        'hi-IN': [
+          { value: 'hi-IN-Neural2-B', label: 'Neural2-B — Male' },
+          { value: 'hi-IN-Neural2-C', label: 'Neural2-C — Male' },
+          { value: 'hi-IN-Neural2-A', label: 'Neural2-A — Female' },
+        ],
+        'es-ES': [
+          { value: 'es-ES-Neural2-B', label: 'Neural2-B — Male' },
+          { value: 'es-ES-Neural2-F', label: 'Neural2-F — Male' },
+          { value: 'es-ES-Neural2-A', label: 'Neural2-A — Female' },
+          { value: 'es-ES-Neural2-C', label: 'Neural2-C — Female' },
+        ],
+        'fr-FR': [
+          { value: 'fr-FR-Neural2-B', label: 'Neural2-B — Male' },
+          { value: 'fr-FR-Neural2-D', label: 'Neural2-D — Male' },
+          { value: 'fr-FR-Neural2-A', label: 'Neural2-A — Female' },
+          { value: 'fr-FR-Neural2-C', label: 'Neural2-C — Female' },
+        ],
+      };
+
+      const LANG_TO_TRANSLATION = {
+        'en-GB': 'en', 'en-US': 'en', 'hi-IN': 'hi', 'es-ES': 'es', 'fr-FR': 'fr',
+      };
+
+      let activeVoiceLang = window.localStorage.getItem('practiceVoiceLang') || 'en-GB';
+      if (!GCLOUD_VOICES[activeVoiceLang]) activeVoiceLang = 'en-GB';
+      let activeLanguage = LANG_TO_TRANSLATION[activeVoiceLang] || 'en';
       let activeVoiceName = window.localStorage.getItem('practiceVoiceName') || '';
-      function isFastVoice(name) {
-        const n = String(name || '').toLowerCase();
-        return n.includes('daniel') || n.includes('mark');
-      }
-      let activeVoiceRate = window.localStorage.getItem('practiceVoiceRate') ||
-        (isFastVoice(activeVoiceName) ? '130' : '100');
+      let activeVoiceRate = window.localStorage.getItem('practiceVoiceRate') || '100';
       let activeLineGap = (function () {
         const stored = Number(window.localStorage.getItem('practiceLineGap'));
         return String(stored > 0 && stored <= 1200 ? stored : 630);
       }());
-      let availableVoices = [];
-      if (!translations[activeLanguage]) {
-        activeLanguage = 'en';
-      }
+      let ttsAudio = null;
       const selectedAssignmentId = "{{ selected_assignment.id|default:'' }}";
       const unitAttemptMap = JSON.parse(document.getElementById('unit-attempt-map').textContent || '{}');
       const assignmentMode = '{{ selected_assignment.mode|default:"sprint" }}';
@@ -685,7 +716,7 @@
       }
 
       function formatVoiceRateValue(value) {
-        return `${Math.round(Number(value || 100))}%`;
+        return `${(Number(value || 100) / 100).toFixed(1)}×`;
       }
 
       function formatLineGapValue(value) {
@@ -695,7 +726,7 @@
       let dangerZone = window.localStorage.getItem('practiceDangerZone') === 'true';
 
       function getVoiceRateLimits() {
-        return { min: 70, max: dangerZone ? 200 : 150, step: 10 };
+        return { min: 50, max: dangerZone ? 200 : 180, step: 5 };
       }
 
       function getLineGapLimits() {
@@ -723,74 +754,15 @@
         }
       }
 
-      function getLanguagePrefix() {
-        const locale = getLocaleConfig();
-        return String(locale.voiceLang || translations.en.voiceLang).split('-')[0].toLowerCase();
-      }
-
-      const NOVELTY_VOICES = new Set([
-        'albert', 'bad news', 'bahh', 'bells', 'boing', 'bubbles', 'cellos',
-        'deranged', 'fred', 'good news', 'hysterical', 'junior', 'kathy',
-        'organ', 'pipe organ', 'princess', 'ralph', 'trinoids', 'whisper',
-        'wobble', 'xander', 'zarvox', 'jester', 'laughing', 'creaky',
-        'superstar', 'crazy', 'boing', 'noise', 'bonkers',
-      ]);
-
-      function isProfessionalVoice(voice) {
-        const nameLower = String(voice.name || '').toLowerCase();
-        return !NOVELTY_VOICES.has(nameLower) && !nameLower.startsWith('com.');
-      }
-
       function refreshVoiceOptions() {
-        const defaultLabel = t('defaultVoice');
-        const currentPrefix = getLanguagePrefix();
-        const matchingVoices = availableVoices.filter((voice) =>
-          String(voice.lang || '').toLowerCase().startsWith(currentPrefix) &&
-          isProfessionalVoice(voice)
-        );
-        const selectedValue = activeVoiceName;
-        voiceSelect.innerHTML = '';
-
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = defaultLabel;
-        voiceSelect.appendChild(defaultOption);
-
-        const byRegion = {};
-        matchingVoices.forEach((voice) => {
-          const key = String(voice.lang || '').toLowerCase();
-          if (!byRegion[key]) byRegion[key] = [];
-          byRegion[key].push(voice);
-        });
-
-        Object.keys(byRegion).sort().forEach((regionKey) => {
-          const group = document.createElement('optgroup');
-          group.label = regionKey.toUpperCase();
-          byRegion[regionKey]
-            .sort((a, b) => String(a.name).localeCompare(String(b.name)))
-            .forEach((voice) => {
-              const option = document.createElement('option');
-              option.value = voice.name;
-              option.textContent = voice.name;
-              group.appendChild(option);
-            });
-          voiceSelect.appendChild(group);
-        });
-
-        const hasSelectedVoice = matchingVoices.some((voice) => voice.name === selectedValue);
-        voiceSelect.value = hasSelectedVoice ? selectedValue : '';
-        if (!hasSelectedVoice) {
-          activeVoiceName = '';
-          window.localStorage.removeItem('practiceVoiceName');
-        }
-      }
-
-      function loadVoices() {
-        if (!('speechSynthesis' in window)) {
-          return;
-        }
-        availableVoices = window.speechSynthesis.getVoices() || [];
-        refreshVoiceOptions();
+        const voices = GCLOUD_VOICES[activeVoiceLang] || [];
+        voiceSelect.innerHTML = voices.map(function (v) {
+          return `<option value="${v.value}">${v.label}</option>`;
+        }).join('');
+        const exists = voices.some(function (v) { return v.value === activeVoiceName; });
+        voiceSelect.value = exists ? activeVoiceName : (voices[0] ? voices[0].value : '');
+        activeVoiceName = voiceSelect.value;
+        if (activeVoiceName) window.localStorage.setItem('practiceVoiceName', activeVoiceName);
       }
 
       function updateTrackSelectionLabels() {
@@ -814,7 +786,7 @@
       }
 
       function applyLanguage() {
-        languageSelect.value = activeLanguage;
+        languageSelect.value = activeVoiceLang;
         speechSettingsEyebrow.textContent = t('speechSettingsEyebrow');
         speechSettingsTitle.textContent = t('speechSettingsTitle');
         previewVoiceButton.textContent = t('previewVoice');
@@ -916,8 +888,10 @@
         window.clearTimeout(speechStartTimer);
         speechStartTimer = null;
         speechSequenceToken += 1;
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
+        if (ttsAudio) {
+          ttsAudio.pause();
+          ttsAudio.src = '';
+          ttsAudio = null;
         }
       }
 
@@ -930,90 +904,49 @@
       }
 
       function speakQuestion(questionText) {
-        if (!activeAudioMode || !('speechSynthesis' in window) || !questionText) {
-          return;
-        }
+        if (!activeAudioMode || !questionText) return;
         stopSpeech();
         const currentSpeechToken = speechSequenceToken;
-        const locale = getLocaleConfig();
-        const digitWords = locale.digitWords || translations.en.digitWords;
-        const operators = locale.operators || translations.en.operators;
+        const operators = (getLocaleConfig().operators) || translations.en.operators;
 
-        function digitsToWords(str) {
-          return String(str)
-            .replace(/\d+/g, (digits) => digits.split('').map((d) => digitWords[d] || d).join(' '))
-            .replace(/\s{2,}/g, ' ')
-            .trim();
-        }
-
-        function lineToSpoken(line, index) {
-          const raw = line.trim();
-          if (index === 0) return digitsToWords(raw);
-          if (/^[+]/.test(raw)) return `${operators.plus || 'plus'} ${digitsToWords(raw.slice(1).trim())}`;
-          if (/^[-]/.test(raw)) return `${operators.minus} ${digitsToWords(raw.slice(1).trim())}`;
-          if (/^[×x*]/.test(raw)) return `${operators.times} ${digitsToWords(raw.slice(1).trim())}`;
-          if (/^[÷/]/.test(raw)) return `${operators.divide} ${digitsToWords(raw.slice(1).trim())}`;
-          return digitsToWords(raw);
-        }
-
-        const rawSpokenLines = String(questionText).split(/\n+/).map((p) => p.trim()).filter(Boolean);
-        // Build spoken token list: whole numbers as a single token (TTS reads place values), decimal digits individually
+        const rawLines = String(questionText).split(/\n+/).map(function (l) { return l.trim(); }).filter(Boolean);
         const spokenLines = [];
-        rawSpokenLines.forEach((line, idx) => {
-          const raw = line.trim();
-          let digits = raw;
-          if (idx > 0) {
-            let opWord = null;
-            if (/^[+]/.test(raw)) { opWord = operators.plus || 'plus'; digits = raw.slice(1).trim(); }
-            else if (/^[-]/.test(raw)) { opWord = operators.minus; digits = raw.slice(1).trim(); }
-            else if (/^[×x*]/.test(raw)) { opWord = operators.times; digits = raw.slice(1).trim(); }
-            else if (/^[÷/]/.test(raw)) { opWord = operators.divide; digits = raw.slice(1).trim(); }
-            else { opWord = operators.plus || 'plus'; } // implicit addition
-            if (opWord) spokenLines.push(opWord);
-          }
-          const numStr = digits.replace(/[^\d.]/g, '');
-          if (numStr) {
-            const dotIdx = numStr.indexOf('.');
-            if (dotIdx === -1) {
-              spokenLines.push(numStr);
-            } else {
-              const wholePart = numStr.slice(0, dotIdx);
-              const decPart = numStr.slice(dotIdx + 1);
-              if (wholePart) spokenLines.push(wholePart);
-              spokenLines.push(operators.point || 'point');
-              decPart.split('').forEach((d) => { if (/\d/.test(d)) spokenLines.push(digitWords[d] || d); });
-            }
+        rawLines.forEach(function (line, idx) {
+          if (idx === 0) {
+            spokenLines.push(line);
+          } else if (/^[+]/.test(line)) {
+            spokenLines.push((operators.plus || 'plus') + ' ' + line.slice(1).trim());
+          } else if (/^[-]/.test(line)) {
+            spokenLines.push((operators.minus || 'minus') + ' ' + line.slice(1).trim());
+          } else if (/^[×x*]/.test(line)) {
+            spokenLines.push((operators.times || 'times') + ' ' + line.slice(1).trim());
+          } else if (/^[÷/]/.test(line)) {
+            spokenLines.push((operators.divide || 'divided by') + ' ' + line.slice(1).trim());
+          } else {
+            spokenLines.push(line);
           }
         });
         if (spokenLines.length) spokenLines.push(operators.equals || 'equals');
 
-        const speakLine = function (index) {
-          if (currentSpeechToken !== speechSequenceToken || index >= spokenLines.length) {
-            return;
-          }
-          const utterance = new SpeechSynthesisUtterance(spokenLines[index]);
-          utterance.lang = locale.voiceLang || translations.en.voiceLang;
-          const selectedVoice = availableVoices.find((voice) => voice.name === activeVoiceName);
-          if (selectedVoice) {
-            utterance.voice = selectedVoice;
-          }
-          utterance.rate = Math.max(0.1, (Number(activeVoiceRate) || 100) / 100);
-          utterance.pitch = 1;
-          utterance.onend = function () {
-            if (currentSpeechToken !== speechSequenceToken || index >= spokenLines.length - 1) {
-              return;
-            }
-            window.setTimeout(function () {
-              speakLine(index + 1);
-            }, Number(activeLineGap) || 630);
-          };
-          window.speechSynthesis.speak(utterance);
-        };
-
         speechStartTimer = window.setTimeout(function () {
-          if (currentSpeechToken === speechSequenceToken) {
-            speakLine(0);
-          }
+          if (currentSpeechToken !== speechSequenceToken) return;
+          fetch('/tts-demo/synthesize/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({
+              text: spokenLines.join('\n'),
+              voice: activeVoiceName,
+              rate: (Number(activeVoiceRate) || 100) / 100,
+              line_gap_ms: Number(activeLineGap) || 630,
+            }),
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (currentSpeechToken !== speechSequenceToken || !data.audio) return;
+              ttsAudio = new Audio(data.audio);
+              ttsAudio.play().catch(function () {});
+            })
+            .catch(function () {});
         }, 400);
       }
 
@@ -1307,8 +1240,9 @@
       }
 
       languageSelect.addEventListener('change', function () {
-        activeLanguage = translations[languageSelect.value] ? languageSelect.value : 'en';
-        window.localStorage.setItem('practiceLanguage', activeLanguage);
+        activeVoiceLang = GCLOUD_VOICES[languageSelect.value] ? languageSelect.value : 'en-GB';
+        activeLanguage = LANG_TO_TRANSLATION[activeVoiceLang] || 'en';
+        window.localStorage.setItem('practiceVoiceLang', activeVoiceLang);
         applyLanguage();
         renderQuestionNav();
         if (summary.classList.contains('is-visible')) {
@@ -1329,9 +1263,6 @@
         activeVoiceName = voiceSelect.value || '';
         if (activeVoiceName) {
           window.localStorage.setItem('practiceVoiceName', activeVoiceName);
-          if (isFastVoice(activeVoiceName) && !window.localStorage.getItem('practiceVoiceRate')) {
-            setVoiceRate(130);
-          }
         } else {
           window.localStorage.removeItem('practiceVoiceName');
         }
@@ -1424,17 +1355,25 @@
       });
 
       previewVoiceButton.addEventListener('click', function () {
-        const locale = getLocaleConfig();
         stopSpeech();
-        const utterance = new SpeechSynthesisUtterance(t('previewSample'));
-        utterance.lang = locale.voiceLang || translations.en.voiceLang;
-        const selectedVoice = availableVoices.find((voice) => voice.name === activeVoiceName);
-        if (selectedVoice) {
-          utterance.voice = selectedVoice;
-        }
-        utterance.rate = Math.max(0.1, (Number(activeVoiceRate) || 100) / 100);
-        utterance.pitch = 1;
-        window.speechSynthesis.speak(utterance);
+        const currentToken = speechSequenceToken;
+        fetch('/tts-demo/synthesize/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+          body: JSON.stringify({
+            text: t('previewSample'),
+            voice: activeVoiceName,
+            rate: (Number(activeVoiceRate) || 100) / 100,
+            line_gap_ms: 0,
+          }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (currentToken !== speechSequenceToken || !data.audio) return;
+            ttsAudio = new Audio(data.audio);
+            ttsAudio.play().catch(function () {});
+          })
+          .catch(function () {});
       });
 
       speedToggleButton.addEventListener('click', function () {
@@ -1776,27 +1715,7 @@
           });
       });
 
-      if ('speechSynthesis' in window) {
-        loadVoices();
-        if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
-          window.speechSynthesis.onvoiceschanged = loadVoices;
-        }
-        // Brave blocks getVoices() initially — poll until voices arrive (up to 3s)
-        if (!availableVoices.length) {
-          let voicePollAttempts = 0;
-          const voicePollId = window.setInterval(function () {
-            voicePollAttempts += 1;
-            const voices = window.speechSynthesis.getVoices() || [];
-            if (voices.length || voicePollAttempts >= 6) {
-              window.clearInterval(voicePollId);
-              if (voices.length) {
-                availableVoices = voices;
-                refreshVoiceOptions();
-              }
-            }
-          }, 500);
-        }
-      }
+      refreshVoiceOptions();
       applyLanguage();
       updateUnitCompletionStates();
     })();
