@@ -666,6 +666,7 @@
       }());
       let ttsAudio = null;
       const ttsCache = {};
+      const ttsPending = {};
       const selectedAssignmentId = "{{ selected_assignment.id|default:'' }}";
       const unitAttemptMap = JSON.parse(document.getElementById('unit-attempt-map').textContent || '{}');
       const assignmentMode = '{{ selected_assignment.mode|default:"sprint" }}';
@@ -898,12 +899,8 @@
         }
       }
 
-      function speakQuestion(questionText) {
-        if (!activeAudioMode || !questionText) return;
-        stopSpeech();
-        const currentSpeechToken = speechSequenceToken;
+      function buildSpokenLines(questionText) {
         const operators = (getLocaleConfig().operators) || translations.en.operators;
-
         const rawLines = String(questionText).split(/\n+/).map(function (l) { return l.trim(); }).filter(Boolean);
         const spokenLines = [];
         rawLines.forEach(function (line, idx) {
@@ -922,37 +919,52 @@
           }
         });
         if (spokenLines.length) spokenLines.push(operators.equals || 'equals');
+        return spokenLines;
+      }
 
-        const cacheKey = activeVoiceName + '|' + activeVoiceRate + '|' + activeLineGap + '|' + spokenLines.join('\n');
+      function fetchTTSAudio(spokenLines) {
+        const key = activeVoiceName + '|' + activeVoiceRate + '|' + activeLineGap + '|' + spokenLines.join('\n');
+        if (ttsCache[key]) return Promise.resolve(ttsCache[key]);
+        if (ttsPending[key]) return ttsPending[key];
+        const p = fetch('/tts/synthesize/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+          body: JSON.stringify({
+            text: spokenLines.join('\n'),
+            voice: activeVoiceName,
+            rate: (Number(activeVoiceRate) || 100) / 100,
+            line_gap_ms: Number(activeLineGap) || 630,
+          }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            delete ttsPending[key];
+            if (data.audio) { ttsCache[key] = data.audio; return data.audio; }
+            return null;
+          })
+          .catch(function () { delete ttsPending[key]; return null; });
+        ttsPending[key] = p;
+        return p;
+      }
+
+      function prefetchTTS(questionText) {
+        if (!activeAudioMode || !questionText) return;
+        fetchTTSAudio(buildSpokenLines(questionText));
+      }
+
+      function speakQuestion(questionText) {
+        if (!activeAudioMode || !questionText) return;
+        stopSpeech();
+        const currentSpeechToken = speechSequenceToken;
+        const spokenLines = buildSpokenLines(questionText);
 
         speechStartTimer = window.setTimeout(function () {
           if (currentSpeechToken !== speechSequenceToken) return;
-
-          if (ttsCache[cacheKey]) {
-            ttsAudio = new Audio(ttsCache[cacheKey]);
+          fetchTTSAudio(spokenLines).then(function (audioData) {
+            if (!audioData || currentSpeechToken !== speechSequenceToken) return;
+            ttsAudio = new Audio(audioData);
             ttsAudio.play().catch(function () {});
-            return;
-          }
-
-          fetch('/tts/synthesize/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-            body: JSON.stringify({
-              text: spokenLines.join('\n'),
-              voice: activeVoiceName,
-              rate: (Number(activeVoiceRate) || 100) / 100,
-              line_gap_ms: Number(activeLineGap) || 630,
-            }),
-          })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-              if (!data.audio) return;
-              ttsCache[cacheKey] = data.audio;
-              if (currentSpeechToken !== speechSequenceToken) return;
-              ttsAudio = new Audio(data.audio);
-              ttsAudio.play().catch(function () {});
-            })
-            .catch(function () {});
+          });
         }, 400);
       }
 
@@ -1217,6 +1229,7 @@
             stageQuestion.textContent = question.question_text;
           }
         }
+        prefetchTTS(question.question_text);
         speakQuestion(question.question_text);
         const isLocked = Boolean(questionStatuses[String(question.id)]);
         answerInput.disabled = isLocked;
