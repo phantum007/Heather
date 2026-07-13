@@ -1916,7 +1916,7 @@ def tts_demo(request):
 @csrf_exempt
 @require_http_methods(['POST'])
 def tts_synthesize(request):
-    import json
+    import json, hashlib, base64, threading
     try:
         body = json.loads(request.body)
     except Exception:
@@ -1924,7 +1924,7 @@ def tts_synthesize(request):
 
     text = (body.get('text') or '').strip()
     voice_name = (body.get('voice') or 'en-GB-Neural2-B').strip()
-    speaking_rate = float(body.get('rate') or 1.0)
+    speaking_rate = round(float(body.get('rate') or 1.0), 2)
     line_gap_ms = max(0, min(3000, int(body.get('line_gap_ms') or 0)))
 
     if not text:
@@ -1932,17 +1932,34 @@ def tts_synthesize(request):
     if len(text) > 500:
         return JsonResponse({'error': 'text too long (max 500 chars)'}, status=400)
 
+    text_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
+    blob_name = f'tts-cache/{voice_name}/{speaking_rate}/{line_gap_ms}/{text_hash}.mp3'
+    bucket_name = getattr(settings, 'GCS_BUCKET_NAME', '')
+
+    # --- GCS cache hit ---
+    if bucket_name:
+        try:
+            gcs = _gcs_client()
+            bucket = gcs.bucket(bucket_name)
+            blob = bucket.blob(blob_name)
+            if blob.exists():
+                audio_bytes = blob.download_as_bytes()
+                audio_b64 = base64.b64encode(audio_bytes).decode('ascii')
+                return JsonResponse({'audio': f'data:audio/mpeg;base64,{audio_b64}'})
+        except Exception:
+            pass  # fall through to synthesize
+
+    # --- GCloud TTS synthesis ---
     try:
         from google.cloud import texttospeech
         credentials_json = getattr(settings, 'GCS_CREDENTIALS_JSON', '')
         if credentials_json:
-            import json as _json
             from google.oauth2 import service_account
-            info = _json.loads(credentials_json)
+            info = json.loads(credentials_json)
             creds = service_account.Credentials.from_service_account_info(info)
-            client = texttospeech.TextToSpeechClient(credentials=creds)
+            tts_client = texttospeech.TextToSpeechClient(credentials=creds)
         else:
-            client = texttospeech.TextToSpeechClient()
+            tts_client = texttospeech.TextToSpeechClient()
 
         language_code = '-'.join(voice_name.split('-')[:2])
 
@@ -1951,27 +1968,33 @@ def tts_synthesize(request):
             lines = [l.strip() for l in text.split('\n') if l.strip()]
             break_tag = f'<break time="{line_gap_ms}ms"/>'
             ssml_body = break_tag.join(_html.escape(l) for l in lines)
-            ssml = f'<speak>{ssml_body}</speak>'
-            synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
+            synthesis_input = texttospeech.SynthesisInput(ssml=f'<speak>{ssml_body}</speak>')
         else:
             synthesis_input = texttospeech.SynthesisInput(text=text)
 
-        voice_params = texttospeech.VoiceSelectionParams(
-            language_code=language_code,
-            name=voice_name,
-        )
-        audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3,
-            speaking_rate=speaking_rate,
-        )
-        response = client.synthesize_speech(
+        tts_response = tts_client.synthesize_speech(
             input=synthesis_input,
-            voice=voice_params,
-            audio_config=audio_config,
+            voice=texttospeech.VoiceSelectionParams(language_code=language_code, name=voice_name),
+            audio_config=texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3,
+                speaking_rate=speaking_rate,
+            ),
         )
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-    import base64
-    audio_b64 = base64.b64encode(response.audio_content).decode('ascii')
+    audio_bytes = tts_response.audio_content
+
+    # --- Upload to GCS in background (non-blocking) ---
+    if bucket_name:
+        def _upload():
+            try:
+                gcs = _gcs_client()
+                blob = gcs.bucket(bucket_name).blob(blob_name)
+                blob.upload_from_string(audio_bytes, content_type='audio/mpeg')
+            except Exception:
+                pass
+        threading.Thread(target=_upload, daemon=True).start()
+
+    audio_b64 = base64.b64encode(audio_bytes).decode('ascii')
     return JsonResponse({'audio': f'data:audio/mpeg;base64,{audio_b64}'})
