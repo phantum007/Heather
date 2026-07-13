@@ -1108,7 +1108,8 @@
           card.classList.toggle('practice-unit-card-passed', savedState.status === 'passed' && !isPerfect);
           card.classList.toggle('practice-unit-card-perfect', isPerfect);
           card.classList.toggle('practice-unit-card-failed', savedState.status === 'failed');
-          card.classList.toggle('practice-unit-card-unattempted', !savedState.status || savedState.status === 'in_progress');
+          card.classList.toggle('practice-unit-card-in-progress', savedState.status === 'in_progress');
+          card.classList.toggle('practice-unit-card-unattempted', !savedState.status);
         });
       }
 

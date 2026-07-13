@@ -215,7 +215,8 @@
     .practice-unit-card.practice-unit-card-passed .practice-unit-trigger { background:#dcfce7; color:#15803d; border-color:#86efac; }
     .practice-unit-card.practice-unit-card-perfect .practice-unit-trigger { background:#16a34a; color:#fff; border-color:#15803d; }
     .practice-unit-card.practice-unit-card-failed .practice-unit-trigger { background:#ffe4e6; color:#be123c; border-color:#fda4af; }
-    .practice-unit-card.practice-unit-card-unattempted .practice-unit-trigger { background:#f8fafc; color:#475569; border-color:#cbd5e1; }
+    .practice-unit-card.practice-unit-card-unattempted .practice-unit-trigger,
+    .practice-unit-card.practice-unit-card-in-progress .practice-unit-trigger { background:#f8fafc; color:#475569; border-color:#cbd5e1; }
     .practice-unit-card.practice-unit-card-active .practice-unit-trigger { background:#dbeafe; color:#1d4ed8; border-color:#93c5fd; box-shadow:0 16px 28px rgba(59, 130, 246, 0.16); }
     .practice-unit-order { width:auto; height:auto; border-radius:0; display:inline-flex; align-items:center; justify-content:center; background:transparent; color:inherit; font-size:17px; font-weight:800; line-height:1; }
     .practice-track-action-bar { display:flex; justify-content:space-between; gap:10px; align-items:center; border:1px solid #dbeafe; border-radius:18px; background:rgba(255,255,255,0.86); padding:10px 12px; }
@@ -240,7 +241,8 @@
     .unit-reset-btn:hover { background:#fef2f2; color:#dc2626; border-color:#fca5a5; }
     .practice-unit-card-passed .unit-reset-btn,
     .practice-unit-card-perfect .unit-reset-btn,
-    .practice-unit-card-failed .unit-reset-btn { display:inline-flex; }
+    .practice-unit-card-failed .unit-reset-btn,
+    .practice-unit-card-in-progress .unit-reset-btn { display:inline-flex; }
     .practice-modal-shell { position:relative; width:min(1200px, 100%); height:min(860px, calc(100vh - 56px)); border-radius:32px; background:#ffffff; box-shadow:0 30px 80px rgba(15, 23, 42, 0.24); display:grid; grid-template-rows:auto minmax(0, 1fr); overflow:hidden; }
     .practice-modal-head { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:22px 24px; border-bottom:1px solid #e2e8f0; }
     .practice-modal-head > div:first-child { min-width:0; }
