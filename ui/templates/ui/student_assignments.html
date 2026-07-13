@@ -94,6 +94,13 @@
                   >
                     <div class="practice-unit-order">{{ forloop.counter }}</div>
                   </button>
+                  <button
+                    type="button"
+                    class="unit-reset-btn"
+                    data-unit-id="{{ unit.id }}"
+                    aria-label="Reset Unit {{ unit.unit_name }}"
+                    title="Reset progress"
+                  >↺</button>
                 </div>
               {% empty %}
                 <div class="tree-empty">No units added for this sub-lesson type yet.</div>
@@ -204,6 +211,18 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="unit-done-overlay" id="unit-reset-overlay" hidden>
+    <div class="unit-done-dialog">
+      <div class="unit-done-icon">🗑️</div>
+      <h3 class="unit-done-title">Reset this unit?</h3>
+      <p class="unit-done-copy">This will <strong>permanently delete</strong> all your attempts and scores for this unit. You'll start fresh from scratch. This cannot be undone.</p>
+      <div class="unit-done-actions">
+        <button type="button" class="button primary" id="unit-reset-cancel">Keep my progress</button>
+        <button type="button" class="button ghost unit-done-danger" id="unit-reset-confirm">Yes, reset it</button>
       </div>
     </div>
   </div>
@@ -1451,6 +1470,59 @@
       unitDoneOverlay.addEventListener('click', function (e) {
         if (e.target === unitDoneOverlay) hideUnitDonePrompt();
       });
+
+      // --- Unit reset (student self-reset) ---
+      const unitResetOverlay = document.getElementById('unit-reset-overlay');
+      const unitResetConfirm = document.getElementById('unit-reset-confirm');
+      const unitResetCancel = document.getElementById('unit-reset-cancel');
+      let pendingResetUnitId = null;
+
+      function showUnitResetPrompt(unitId) {
+        pendingResetUnitId = unitId;
+        unitResetOverlay.removeAttribute('hidden');
+      }
+
+      function hideUnitResetPrompt() {
+        unitResetOverlay.setAttribute('hidden', '');
+        pendingResetUnitId = null;
+      }
+
+      unitResetCancel.addEventListener('click', hideUnitResetPrompt);
+      unitResetOverlay.addEventListener('click', function (e) {
+        if (e.target === unitResetOverlay) hideUnitResetPrompt();
+      });
+
+      unitResetConfirm.addEventListener('click', function () {
+        const unitId = pendingResetUnitId;
+        if (!unitId) return;
+        hideUnitResetPrompt();
+
+        const formData = new URLSearchParams();
+        formData.set('assignment_id', String(selectedAssignmentId));
+        formData.set('csrfmiddlewaretoken', getCookie('csrftoken'));
+
+        fetch(`/student/units/${unitId}/reset/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formData.toString(),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function () {
+            delete unitAttemptMap[String(unitId)];
+            selectUnit(null);
+            updateUnitCompletionStates();
+            updateTrackSelectionLabels();
+          })
+          .catch(function () {});
+      });
+
+      document.querySelectorAll('.unit-reset-btn').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          showUnitResetPrompt(btn.dataset.unitId);
+        });
+      });
+      // --- end unit reset ---
 
       function openUnit(unitId, unitPath, practiceMode, audioMode) {
         const preCheck = loadUnitAttempts(unitId);

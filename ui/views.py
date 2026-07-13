@@ -1610,6 +1610,31 @@ def teacher_student_unit_attempts(request, student_id, unit_id):
 
 
 @require_http_methods(['POST'])
+def student_reset_unit(request, unit_id):
+    user, response = _student_guard(request)
+    if response:
+        return response
+
+    assignment_id = request.POST.get('assignment_id', '').strip()
+    if not assignment_id:
+        return JsonResponse({'message': 'assignment_id is required.'}, status=400)
+
+    assignment = get_object_or_404(Assignment, id=assignment_id, student_id=user.id)
+    get_object_or_404(Unit, id=unit_id)
+
+    deleted_count, _ = CurriculumUnitAttempt.objects.filter(
+        student_id=user.id,
+        unit_id=unit_id,
+        assignment_id=assignment.id,
+    ).delete()
+
+    return JsonResponse({
+        'message': f'Unit progress reset. {deleted_count} attempt(s) cleared.',
+        'deleted': deleted_count,
+    })
+
+
+@require_http_methods(['POST'])
 def teacher_reset_student_unit(request, student_id, unit_id):
     user, response = _teacher_guard(request)
     if response:

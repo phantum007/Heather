@@ -235,6 +235,12 @@
     .unit-done-actions { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
     .unit-done-danger { color:#dc2626 !important; border-color:#dc2626 !important; font-size:13px; }
     .unit-done-danger:hover { background:#fef2f2 !important; }
+    .practice-unit-card { position:relative; }
+    .unit-reset-btn { position:absolute; top:-6px; right:-6px; width:22px; height:22px; border-radius:50%; border:1.5px solid #cbd5e1; background:#fff; color:#94a3b8; font-size:12px; line-height:1; display:none; align-items:center; justify-content:center; cursor:pointer; padding:0; z-index:2; transition:background .14s, color .14s, border-color .14s; }
+    .unit-reset-btn:hover { background:#fef2f2; color:#dc2626; border-color:#fca5a5; }
+    .practice-unit-card-passed .unit-reset-btn,
+    .practice-unit-card-perfect .unit-reset-btn,
+    .practice-unit-card-failed .unit-reset-btn { display:inline-flex; }
     .practice-modal-shell { position:relative; width:min(1200px, 100%); height:min(860px, calc(100vh - 56px)); border-radius:32px; background:#ffffff; box-shadow:0 30px 80px rgba(15, 23, 42, 0.24); display:grid; grid-template-rows:auto minmax(0, 1fr); overflow:hidden; }
     .practice-modal-head { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:22px 24px; border-bottom:1px solid #e2e8f0; }
     .practice-modal-head > div:first-child { min-width:0; }
