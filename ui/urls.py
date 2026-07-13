@@ -31,6 +31,5 @@ urlpatterns = [
     path('teacher/toys/', views.teacher_toys, name='ui-teacher-toys'),
     path('teacher/students/<int:student_id>/redemptions/', views.teacher_student_redemptions, name='ui-teacher-student-redemptions'),
     path('student/coins/redeem/', views.student_redeem_toy, name='ui-student-redeem-toy'),
-    path('tts-demo/', views.tts_demo, name='ui-tts-demo'),
-    path('tts-demo/synthesize/', views.tts_synthesize, name='ui-tts-synthesize'),
+    path('tts/synthesize/', views.tts_synthesize, name='ui-tts-synthesize'),
 ]

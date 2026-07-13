@@ -1909,10 +1909,6 @@ def student_redeem_toy(request):
 # Google Cloud TTS demo
 # ---------------------------------------------------------------------------
 
-def tts_demo(request):
-    return render(request, 'ui/tts_demo.html')
-
-
 @csrf_exempt
 @require_http_methods(['POST'])
 def tts_synthesize(request):

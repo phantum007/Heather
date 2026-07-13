@@ -934,7 +934,7 @@
             return;
           }
 
-          fetch('/tts-demo/synthesize/', {
+          fetch('/tts/synthesize/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
             body: JSON.stringify({
@@ -1363,7 +1363,7 @@
       previewVoiceButton.addEventListener('click', function () {
         stopSpeech();
         const currentToken = speechSequenceToken;
-        fetch('/tts-demo/synthesize/', {
+        fetch('/tts/synthesize/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
           body: JSON.stringify({
