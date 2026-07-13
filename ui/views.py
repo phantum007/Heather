@@ -1959,14 +1959,19 @@ def tts_synthesize(request):
 
         language_code = '-'.join(voice_name.split('-')[:2])
 
+        import html as _html, re as _re
+        lines = [l.strip() for l in text.split('\n') if l.strip()]
+
+        def _to_ssml_line(line):
+            escaped = _html.escape(line)
+            return _re.sub(r'\d+', lambda m: f'<say-as interpret-as="cardinal">{m.group()}</say-as>', escaped)
+
         if line_gap_ms > 0:
-            import html as _html
-            lines = [l.strip() for l in text.split('\n') if l.strip()]
             break_tag = f'<break time="{line_gap_ms}ms"/>'
-            ssml_body = break_tag.join(_html.escape(l) for l in lines)
-            synthesis_input = texttospeech.SynthesisInput(ssml=f'<speak>{ssml_body}</speak>')
+            ssml_body = break_tag.join(_to_ssml_line(l) for l in lines)
         else:
-            synthesis_input = texttospeech.SynthesisInput(text=text)
+            ssml_body = ' '.join(_to_ssml_line(l) for l in lines)
+        synthesis_input = texttospeech.SynthesisInput(ssml=f'<speak>{ssml_body}</speak>')
 
         tts_response = tts_client.synthesize_speech(
             input=synthesis_input,
