@@ -1100,6 +1100,8 @@
           }
           const payloadElement = document.getElementById(`unit-questions-${trigger.dataset.unitId}`);
           const questions = payloadElement ? JSON.parse(payloadElement.textContent) : [];
+          const rawEntry = unitAttemptMap[String(trigger.dataset.unitId)];
+          const hasAttempt = !!(rawEntry && rawEntry.status);
           const savedState = loadUnitAttempts(trigger.dataset.unitId);
           const savedStatuses = savedState.statuses || {};
           const isComplete = savedState.status === 'passed';
@@ -1109,10 +1111,10 @@
           card.classList.toggle('practice-unit-card-passed', savedState.status === 'passed' && !isPerfect);
           card.classList.toggle('practice-unit-card-perfect', isPerfect);
           card.classList.toggle('practice-unit-card-failed', savedState.status === 'failed');
-          card.classList.toggle('practice-unit-card-in-progress', savedState.status === 'in_progress');
-          card.classList.toggle('practice-unit-card-unattempted', !savedState.status);
+          card.classList.toggle('practice-unit-card-in-progress', hasAttempt && savedState.status === 'in_progress');
+          card.classList.toggle('practice-unit-card-unattempted', !hasAttempt);
           const resetBtn = card.querySelector('.unit-reset-btn');
-          if (resetBtn) resetBtn.hidden = !savedState.status;
+          if (resetBtn) resetBtn.hidden = !hasAttempt;
         });
       }
 
