@@ -55,7 +55,6 @@
             <select id="practice-language" class="input">
               <option value="en-GB">English (UK)</option>
               <option value="en-US">English (US)</option>
-              <option value="hi-IN">Hindi</option>
               <option value="es-ES">Spanish</option>
               <option value="fr-FR">French</option>
             </select>
@@ -627,38 +626,33 @@
       let activeAudioMode = false;
       const GCLOUD_VOICES = {
         'en-GB': [
-          { value: 'en-GB-Neural2-B', label: 'Neural2-B — Male' },
-          { value: 'en-GB-Neural2-A', label: 'Neural2-A — Female' },
-          { value: 'en-GB-Neural2-C', label: 'Neural2-C — Female' },
-          { value: 'en-GB-Neural2-D', label: 'Neural2-D — Male' },
+          { value: 'en-GB-Neural2-B', label: 'Oliver (Male)' },
+          { value: 'en-GB-Neural2-D', label: 'Harry (Male)' },
+          { value: 'en-GB-Neural2-A', label: 'Emma (Female)' },
+          { value: 'en-GB-Neural2-C', label: 'Sophie (Female)' },
         ],
         'en-US': [
-          { value: 'en-US-Neural2-D', label: 'Neural2-D — Male' },
-          { value: 'en-US-Neural2-A', label: 'Neural2-A — Male' },
-          { value: 'en-US-Neural2-C', label: 'Neural2-C — Female' },
-          { value: 'en-US-Neural2-F', label: 'Neural2-F — Female' },
-        ],
-        'hi-IN': [
-          { value: 'hi-IN-Neural2-B', label: 'Neural2-B — Male' },
-          { value: 'hi-IN-Neural2-C', label: 'Neural2-C — Male' },
-          { value: 'hi-IN-Neural2-A', label: 'Neural2-A — Female' },
+          { value: 'en-US-Neural2-D', label: 'Michael (Male)' },
+          { value: 'en-US-Neural2-A', label: 'James (Male)' },
+          { value: 'en-US-Neural2-C', label: 'Emily (Female)' },
+          { value: 'en-US-Neural2-F', label: 'Jessica (Female)' },
         ],
         'es-ES': [
-          { value: 'es-ES-Neural2-B', label: 'Neural2-B — Male' },
-          { value: 'es-ES-Neural2-F', label: 'Neural2-F — Male' },
-          { value: 'es-ES-Neural2-A', label: 'Neural2-A — Female' },
-          { value: 'es-ES-Neural2-C', label: 'Neural2-C — Female' },
+          { value: 'es-ES-Neural2-B', label: 'Carlos (Male)' },
+          { value: 'es-ES-Neural2-F', label: 'Alejandro (Male)' },
+          { value: 'es-ES-Neural2-A', label: 'Sofia (Female)' },
+          { value: 'es-ES-Neural2-C', label: 'Isabella (Female)' },
         ],
         'fr-FR': [
-          { value: 'fr-FR-Neural2-B', label: 'Neural2-B — Male' },
-          { value: 'fr-FR-Neural2-D', label: 'Neural2-D — Male' },
-          { value: 'fr-FR-Neural2-A', label: 'Neural2-A — Female' },
-          { value: 'fr-FR-Neural2-C', label: 'Neural2-C — Female' },
+          { value: 'fr-FR-Neural2-B', label: 'Lucas (Male)' },
+          { value: 'fr-FR-Neural2-D', label: 'Antoine (Male)' },
+          { value: 'fr-FR-Neural2-A', label: 'Camille (Female)' },
+          { value: 'fr-FR-Neural2-C', label: 'Sophie (Female)' },
         ],
       };
 
       const LANG_TO_TRANSLATION = {
-        'en-GB': 'en', 'en-US': 'en', 'hi-IN': 'hi', 'es-ES': 'es', 'fr-FR': 'fr',
+        'en-GB': 'en', 'en-US': 'en', 'es-ES': 'es', 'fr-FR': 'fr',
       };
 
       let activeVoiceLang = window.localStorage.getItem('practiceVoiceLang') || 'en-GB';
@@ -671,6 +665,7 @@
         return String(stored > 0 && stored <= 1200 ? stored : 630);
       }());
       let ttsAudio = null;
+      const ttsCache = {};
       const selectedAssignmentId = "{{ selected_assignment.id|default:'' }}";
       const unitAttemptMap = JSON.parse(document.getElementById('unit-attempt-map').textContent || '{}');
       const assignmentMode = '{{ selected_assignment.mode|default:"sprint" }}';
@@ -928,8 +923,17 @@
         });
         if (spokenLines.length) spokenLines.push(operators.equals || 'equals');
 
+        const cacheKey = activeVoiceName + '|' + activeVoiceRate + '|' + activeLineGap + '|' + spokenLines.join('\n');
+
         speechStartTimer = window.setTimeout(function () {
           if (currentSpeechToken !== speechSequenceToken) return;
+
+          if (ttsCache[cacheKey]) {
+            ttsAudio = new Audio(ttsCache[cacheKey]);
+            ttsAudio.play().catch(function () {});
+            return;
+          }
+
           fetch('/tts-demo/synthesize/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
@@ -942,7 +946,9 @@
           })
             .then(function (r) { return r.json(); })
             .then(function (data) {
-              if (currentSpeechToken !== speechSequenceToken || !data.audio) return;
+              if (!data.audio) return;
+              ttsCache[cacheKey] = data.audio;
+              if (currentSpeechToken !== speechSequenceToken) return;
               ttsAudio = new Audio(data.audio);
               ttsAudio.play().catch(function () {});
             })
