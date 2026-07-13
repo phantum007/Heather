@@ -1421,6 +1421,249 @@ def student_assignments(request):
     )
 
 
+def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_name, attempt_number, elapsed_seconds):
+    import threading
+    from django.core.mail import EmailMultiAlternatives
+    from django.conf import settings as _s
+
+    recipients = getattr(_s, 'UNIT_REPORT_RECIPIENTS', [])
+    if not recipients:
+        return
+
+    try:
+        from core.models import CurriculumQuestionAttempt, CurriculumUnitAttempt
+        attempt = CurriculumUnitAttempt.objects.get(id=attempt_id)
+        q_attempts = (
+            CurriculumQuestionAttempt.objects
+            .filter(unit_attempt_id=attempt_id)
+            .select_related('curriculum_question')
+            .order_by('id')
+        )
+        total = q_attempts.count()
+        correct = attempt.correct_count
+        wrong = attempt.wrong_count
+        score_pct = round(correct / total * 100) if total else 0
+        passed = attempt.status == CurriculumUnitAttempt.STATUS_PASSED
+
+        mins, secs = divmod(elapsed_seconds, 60)
+        time_str = f'{mins}m {secs}s' if mins else f'{secs}s'
+
+        status_color = '#10b981' if passed else '#ef4444'
+        status_label = 'PASSED ✓' if passed else 'NEEDS PRACTICE ✗'
+
+        question_rows = ''
+        for idx, qa in enumerate(q_attempts, 1):
+            q_text = ' | '.join(qa.curriculum_question.question_text.split('\n')) if qa.curriculum_question else '—'
+            result_cell = '&#10003;' if qa.is_correct else '&#10007;'
+            result_color = '#28a745' if qa.is_correct else '#dc3545'
+            row_bg = '#ffffff' if idx % 2 == 0 else '#f7f9fc'
+            question_rows += (
+                f'<tr style="background:{row_bg};">'
+                f'<td style="padding:10px 14px;color:#555;border-bottom:1px solid #eee;">{idx}</td>'
+                f'<td style="padding:10px 14px;color:#333;font-family:monospace;border-bottom:1px solid #eee;">{q_text}</td>'
+                f'<td style="padding:10px 14px;color:#333;text-align:center;border-bottom:1px solid #eee;">{qa.student_answer}</td>'
+                f'<td style="padding:10px 14px;text-align:center;font-size:18px;font-weight:bold;color:{result_color};border-bottom:1px solid #eee;">{result_cell}</td>'
+                f'</tr>'
+            )
+
+        bar_width = max(2, score_pct)
+        bar_color = '#28a745' if passed else '#fd7e14'
+        status_badge_bg = '#d4edda' if passed else '#f8d7da'
+        status_badge_color = '#155724' if passed else '#721c24'
+        status_text = 'PASSED' if passed else 'NEEDS PRACTICE'
+
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Unit Progress Report</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:30px 0;">
+<tr><td align="center">
+
+<table width="680" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 5px 20px rgba(0,0,0,.1);">
+
+  <!-- Header -->
+  <tr>
+    <td style="background:#0d6efd;padding:20px 28px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="left" style="color:white;font-size:22px;font-weight:bold;letter-spacing:1px;">
+            &#129518; Heather Abacus
+          </td>
+          <td align="right" style="color:rgba(255,255,255,0.9);font-size:15px;font-weight:bold;">
+            UNIT PROGRESS REPORT
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Banner -->
+  <tr>
+    <td>
+      <img src="https://images.unsplash.com/photo-1509228468518-180dd4864904?w=1200&q=80"
+           width="680" alt="Abacus Practice" style="display:block;">
+    </td>
+  </tr>
+
+  <!-- Greeting -->
+  <tr>
+    <td style="padding:28px 28px 10px;">
+      <h2 style="margin:0 0 8px;color:#222;font-size:20px;">Hello,</h2>
+      <p style="font-size:15px;color:#555;line-height:1.7;margin:0;">
+        <strong>{student_name}</strong> has just completed a unit practice session.
+        Here is a detailed summary of their performance.
+      </p>
+    </td>
+  </tr>
+
+  <!-- Status badge -->
+  <tr>
+    <td style="padding:10px 28px 20px;">
+      <span style="display:inline-block;background:{status_badge_bg};color:{status_badge_color};
+                   padding:6px 18px;border-radius:20px;font-size:13px;font-weight:bold;
+                   letter-spacing:0.5px;">
+        {status_text}
+      </span>
+      &nbsp;
+      <span style="font-size:13px;color:#888;">Attempt #{attempt_number} &nbsp;|&nbsp; {unit_name} &nbsp;|&nbsp; {time_str}</span>
+    </td>
+  </tr>
+
+  <!-- Summary Cards -->
+  <tr>
+    <td style="padding:0 20px 24px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td width="25%" style="padding:6px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#e8f5e9;border-radius:8px;">
+              <tr><td align="center" style="padding:18px 10px;">
+                <h1 style="margin:0;color:#2e7d32;font-size:32px;">{total}</h1>
+                <p style="margin:6px 0 0;font-size:12px;color:#555;font-weight:bold;">TOTAL</p>
+              </td></tr>
+            </table>
+          </td>
+          <td width="25%" style="padding:6px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#e3f2fd;border-radius:8px;">
+              <tr><td align="center" style="padding:18px 10px;">
+                <h1 style="margin:0;color:#1565c0;font-size:32px;">{correct}</h1>
+                <p style="margin:6px 0 0;font-size:12px;color:#555;font-weight:bold;">CORRECT</p>
+              </td></tr>
+            </table>
+          </td>
+          <td width="25%" style="padding:6px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffebee;border-radius:8px;">
+              <tr><td align="center" style="padding:18px 10px;">
+                <h1 style="margin:0;color:#c62828;font-size:32px;">{wrong}</h1>
+                <p style="margin:6px 0 0;font-size:12px;color:#555;font-weight:bold;">INCORRECT</p>
+              </td></tr>
+            </table>
+          </td>
+          <td width="25%" style="padding:6px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff8e1;border-radius:8px;">
+              <tr><td align="center" style="padding:18px 10px;">
+                <h1 style="margin:0;color:#ef6c00;font-size:32px;">{score_pct}%</h1>
+                <p style="margin:6px 0 0;font-size:12px;color:#555;font-weight:bold;">SCORE</p>
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Progress Bar -->
+  <tr>
+    <td style="padding:0 28px 28px;">
+      <h3 style="color:#333;margin:0 0 10px;font-size:14px;">Score Progress</h3>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#e0e0e0;border-radius:30px;overflow:hidden;">
+        <tr>
+          <td style="background:{bar_color};height:16px;width:{bar_width}%;border-radius:30px;font-size:0;">&nbsp;</td>
+          <td style="width:{100 - bar_width}%;font-size:0;">&nbsp;</td>
+        </tr>
+      </table>
+      <p style="font-size:13px;color:#666;margin:6px 0 0;">{score_pct}% — {correct} of {total} questions correct</p>
+    </td>
+  </tr>
+
+  <!-- Details Table -->
+  <tr>
+    <td style="padding:0 28px 28px;">
+      <h3 style="color:#333;margin:0 0 12px;font-size:15px;">Session Details</h3>
+      <table width="100%" cellpadding="10" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
+        <tr style="background:#f7f9fc;">
+          <td style="color:#666;border-bottom:1px solid #eee;">Student</td>
+          <td style="color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{student_name}</td>
+        </tr>
+        <tr>
+          <td style="color:#666;border-bottom:1px solid #eee;">Unit</td>
+          <td style="color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{unit_name}</td>
+        </tr>
+        <tr style="background:#f7f9fc;">
+          <td style="color:#666;border-bottom:1px solid #eee;">Lesson</td>
+          <td style="color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{sub_lesson_name}</td>
+        </tr>
+        <tr>
+          <td style="color:#666;border-bottom:1px solid #eee;">Attempt #</td>
+          <td style="color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{attempt_number}</td>
+        </tr>
+        <tr style="background:#f7f9fc;">
+          <td style="color:#666;">Time Taken</td>
+          <td style="color:#222;font-weight:bold;text-align:right;">{time_str}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Question Breakdown -->
+  <tr>
+    <td style="padding:0 28px 32px;">
+      <h3 style="color:#333;margin:0 0 12px;font-size:15px;">Question Breakdown</h3>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+        <tr style="background:#0d6efd;color:white;">
+          <th align="left" style="padding:10px 14px;font-weight:600;">#</th>
+          <th align="left" style="padding:10px 14px;font-weight:600;">Question</th>
+          <th align="center" style="padding:10px 14px;font-weight:600;">Answer Given</th>
+          <th align="center" style="padding:10px 14px;font-weight:600;">Result</th>
+        </tr>
+        {question_rows}
+      </table>
+    </td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="background:#0d6efd;color:white;padding:20px 28px;text-align:center;">
+      <h3 style="margin:0 0 6px;">Thank You</h3>
+      <p style="margin:0 0 6px;font-size:14px;">Heather Abacus Academy</p>
+      <p style="font-size:12px;opacity:.8;margin:0;">This is an automated notification. Please do not reply to this email.</p>
+    </td>
+  </tr>
+
+</table>
+
+</td></tr>
+</table>
+
+</body>
+</html>"""
+
+        subject = f'Heather Abacus — {student_name} {"passed" if passed else "completed"} {unit_name}'
+        text_body = (
+            f'{student_name} {"passed" if passed else "completed"} {unit_name}\n'
+            f'Score: {correct}/{total} ({score_pct}%) | Attempt #{attempt_number} | Time: {time_str}\n'
+        )
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=recipients)
+        msg.attach_alternative(html, 'text/html')
+        msg.send(fail_silently=True)
+    except Exception:
+        pass
+
+
 @require_http_methods(['POST'])
 def student_submit_unit_question(request):
     user, response = _student_guard(request)
@@ -1533,6 +1776,27 @@ def student_submit_unit_question(request):
             attempt.completed_at = None
         attempt.updated_at = timezone.now()
         attempt.save(update_fields=['correct_count', 'wrong_count', 'elapsed_seconds', 'status', 'completed_at', 'updated_at'])
+
+        if is_complete:
+            import threading as _threading
+            profile = StudentProfile.objects.filter(user_id=user.id).first()
+            student_name = (
+                f'{profile.first_name or ""} {profile.last_name or ""}'.strip()
+                or user.username
+            ) if profile else user.username
+            sub_lesson = unit.sub_lesson
+            _threading.Thread(
+                target=_send_unit_completion_email,
+                args=(
+                    attempt.id,
+                    student_name,
+                    unit.unit_name,
+                    sub_lesson.sub_lesson_name if sub_lesson else '',
+                    attempt.attempt_number,
+                    attempt.elapsed_seconds or 0,
+                ),
+                daemon=True,
+            ).start()
 
     return JsonResponse(
         {
@@ -1929,7 +2193,7 @@ def tts_synthesize(request):
         return JsonResponse({'error': 'text too long (max 500 chars)'}, status=400)
 
     text_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
-    blob_name = f'tts-cache/{voice_name}/{speaking_rate}/{line_gap_ms}/{text_hash}.mp3'
+    blob_name = f'tts-cache/v2/{voice_name}/{speaking_rate}/{line_gap_ms}/{text_hash}.mp3'
     bucket_name = getattr(settings, 'GCS_BUCKET_NAME', '')
 
     # --- GCS cache hit ---
