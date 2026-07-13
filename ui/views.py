@@ -14,6 +14,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils._os import safe_join
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from core.answer_utils import answers_match, truncate_numeric_precision
@@ -1470,6 +1471,12 @@ def student_submit_unit_question(request):
                 updated_at=timezone.now(),
             )
         elif latest_attempt.status in (CurriculumUnitAttempt.STATUS_PASSED, CurriculumUnitAttempt.STATUS_FAILED):
+            already_in_completed = CurriculumQuestionAttempt.objects.filter(
+                unit_attempt_id=latest_attempt.id,
+                curriculum_question_id=question.id,
+            ).exists()
+            if already_in_completed:
+                return JsonResponse({'message': 'This question was already attempted.'}, status=400)
             attempt = CurriculumUnitAttempt.objects.create(
                 student_id=user.id,
                 unit_id=unit.id,
@@ -1599,6 +1606,31 @@ def teacher_student_unit_attempts(request, student_id, unit_id):
         'student_id': student_id,
         'assignment_id': assignment.id,
         'attempts': data,
+    })
+
+
+@require_http_methods(['POST'])
+def student_reset_unit(request, unit_id):
+    user, response = _student_guard(request)
+    if response:
+        return response
+
+    assignment_id = request.POST.get('assignment_id', '').strip()
+    if not assignment_id:
+        return JsonResponse({'message': 'assignment_id is required.'}, status=400)
+
+    assignment = get_object_or_404(Assignment, id=assignment_id, student_id=user.id)
+    get_object_or_404(Unit, id=unit_id)
+
+    deleted_count, _ = CurriculumUnitAttempt.objects.filter(
+        student_id=user.id,
+        unit_id=unit_id,
+        assignment_id=assignment.id,
+    ).delete()
+
+    return JsonResponse({
+        'message': f'Unit progress reset. {deleted_count} attempt(s) cleared.',
+        'deleted': deleted_count,
     })
 
 
@@ -1871,3 +1903,75 @@ def student_redeem_toy(request):
         'coins_remaining': profile.coins,
         'toy_name': toy.name,
     })
+
+
+# ---------------------------------------------------------------------------
+# Google Cloud TTS demo
+# ---------------------------------------------------------------------------
+
+def tts_demo(request):
+    return render(request, 'ui/tts_demo.html')
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def tts_synthesize(request):
+    import json
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    text = (body.get('text') or '').strip()
+    voice_name = (body.get('voice') or 'en-GB-Neural2-B').strip()
+    speaking_rate = float(body.get('rate') or 1.0)
+    line_gap_ms = max(0, min(3000, int(body.get('line_gap_ms') or 0)))
+
+    if not text:
+        return JsonResponse({'error': 'text is required'}, status=400)
+    if len(text) > 500:
+        return JsonResponse({'error': 'text too long (max 500 chars)'}, status=400)
+
+    try:
+        from google.cloud import texttospeech
+        credentials_json = getattr(settings, 'GCS_CREDENTIALS_JSON', '')
+        if credentials_json:
+            import json as _json
+            from google.oauth2 import service_account
+            info = _json.loads(credentials_json)
+            creds = service_account.Credentials.from_service_account_info(info)
+            client = texttospeech.TextToSpeechClient(credentials=creds)
+        else:
+            client = texttospeech.TextToSpeechClient()
+
+        language_code = '-'.join(voice_name.split('-')[:2])
+
+        if line_gap_ms > 0:
+            import html as _html
+            lines = [l.strip() for l in text.split('\n') if l.strip()]
+            break_tag = f'<break time="{line_gap_ms}ms"/>'
+            ssml_body = break_tag.join(_html.escape(l) for l in lines)
+            ssml = f'<speak>{ssml_body}</speak>'
+            synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
+        else:
+            synthesis_input = texttospeech.SynthesisInput(text=text)
+
+        voice_params = texttospeech.VoiceSelectionParams(
+            language_code=language_code,
+            name=voice_name,
+        )
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=speaking_rate,
+        )
+        response = client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice_params,
+            audio_config=audio_config,
+        )
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+    import base64
+    audio_b64 = base64.b64encode(response.audio_content).decode('ascii')
+    return JsonResponse({'audio': f'data:audio/mpeg;base64,{audio_b64}'})

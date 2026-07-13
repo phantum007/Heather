@@ -24,10 +24,13 @@ urlpatterns = [
     path('student/coins/', views.student_coins, name='ui-student-coins'),
     path('student/assignments/', views.student_assignments, name='ui-student-assignments'),
     path('student/unit-practice/submit/', views.student_submit_unit_question, name='ui-student-unit-practice-submit'),
+    path('student/units/<int:unit_id>/reset/', views.student_reset_unit, name='ui-student-reset-unit'),
     path('teacher/students/<int:student_id>/units/<int:unit_id>/attempts/', views.teacher_student_unit_attempts, name='ui-teacher-student-unit-attempts'),
     path('teacher/students/<int:student_id>/units/<int:unit_id>/reset/', views.teacher_reset_student_unit, name='ui-teacher-reset-student-unit'),
     path('teacher/students/<int:student_id>/progress/', views.teacher_student_progress, name='ui-teacher-student-progress'),
     path('teacher/toys/', views.teacher_toys, name='ui-teacher-toys'),
     path('teacher/students/<int:student_id>/redemptions/', views.teacher_student_redemptions, name='ui-teacher-student-redemptions'),
     path('student/coins/redeem/', views.student_redeem_toy, name='ui-student-redeem-toy'),
+    path('tts-demo/', views.tts_demo, name='ui-tts-demo'),
+    path('tts-demo/synthesize/', views.tts_synthesize, name='ui-tts-synthesize'),
 ]
