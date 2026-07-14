@@ -2184,12 +2184,9 @@ def tts_synthesize(request):
     except Exception:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
-    import logging as _logging
-    _tts_log = _logging.getLogger('tts')
     text = (body.get('text') or '').strip()
     voice_name = (body.get('voice') or 'en-GB-Neural2-B').strip()
     speaking_rate = round(float(body.get('rate') or 1.0), 2)
-    _tts_log.warning('TTS text received: %r', text)
     line_gap_ms = max(0, min(3000, int(body.get('line_gap_ms') or 0)))
 
     if not text:
