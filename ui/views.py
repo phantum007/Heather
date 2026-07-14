@@ -1716,12 +1716,6 @@ def student_submit_unit_question(request):
                 updated_at=timezone.now(),
             )
         elif latest_attempt.status in (CurriculumUnitAttempt.STATUS_PASSED, CurriculumUnitAttempt.STATUS_FAILED):
-            already_in_completed = CurriculumQuestionAttempt.objects.filter(
-                unit_attempt_id=latest_attempt.id,
-                curriculum_question_id=question.id,
-            ).exists()
-            if already_in_completed:
-                return JsonResponse({'message': 'This question was already attempted.'}, status=400)
             attempt = CurriculumUnitAttempt.objects.create(
                 student_id=user.id,
                 unit_id=unit.id,
