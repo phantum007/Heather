@@ -932,6 +932,8 @@
             spokenLines.push((operators.times || 'times') + ' ' + _expandNums(line.slice(1).trim()));
           } else if (/^[÷/]/.test(line)) {
             spokenLines.push((operators.divide || 'divided by') + ' ' + _expandNums(line.slice(1).trim()));
+          } else if (/^\d/.test(line)) {
+            spokenLines.push((operators.plus || 'plus') + ' ' + _expandNums(line));
           } else {
             spokenLines.push(_expandNums(line));
           }
