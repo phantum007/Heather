@@ -1422,10 +1422,11 @@ def student_assignments(request):
 
 
 def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_name, attempt_number, elapsed_seconds):
-    import threading
+    import logging, threading
     from django.core.mail import EmailMultiAlternatives
     from django.conf import settings as _s
 
+    _log = logging.getLogger(__name__)
     recipients = getattr(_s, 'UNIT_REPORT_RECIPIENTS', [])
     if not recipients:
         return
@@ -1659,9 +1660,10 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
         )
         msg = EmailMultiAlternatives(subject=subject, body=text_body, to=recipients)
         msg.attach_alternative(html, 'text/html')
-        msg.send(fail_silently=True)
-    except Exception:
-        pass
+        msg.send(fail_silently=False)
+        _log.info('Unit completion email sent for attempt %s to %s', attempt_id, recipients)
+    except Exception as _exc:
+        _log.error('Unit completion email failed for attempt %s: %s', attempt_id, _exc)
 
 
 @require_http_methods(['POST'])

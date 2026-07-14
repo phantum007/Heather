@@ -899,23 +899,41 @@
         }
       }
 
+      function _numToWords(n) {
+        var ones = ['zero','one','two','three','four','five','six','seven','eight','nine',
+                    'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+        var tens = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+        if (n < 0) return 'negative ' + _numToWords(-n);
+        if (n < 20) return ones[n];
+        if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '');
+        if (n < 1000) return ones[Math.floor(n / 100)] + ' hundred' + (n % 100 ? ' ' + _numToWords(n % 100) : '');
+        if (n < 1000000) return _numToWords(Math.floor(n / 1000)) + ' thousand' + (n % 1000 ? ' ' + _numToWords(n % 1000) : '');
+        if (n < 1000000000) return _numToWords(Math.floor(n / 1000000)) + ' million' + (n % 1000000 ? ' ' + _numToWords(n % 1000000) : '');
+        return _numToWords(Math.floor(n / 1000000000)) + ' billion' + (n % 1000000000 ? ' ' + _numToWords(n % 1000000000) : '');
+      }
+
+      function _expandNums(text) {
+        if (activeVoiceLang !== 'en-GB' && activeVoiceLang !== 'en-US') return String(text);
+        return String(text).replace(/\d+/g, function (m) { return _numToWords(parseInt(m, 10)); });
+      }
+
       function buildSpokenLines(questionText) {
         const operators = (getLocaleConfig().operators) || translations.en.operators;
         const rawLines = String(questionText).split(/\n+/).map(function (l) { return l.trim(); }).filter(Boolean);
         const spokenLines = [];
         rawLines.forEach(function (line, idx) {
           if (idx === 0) {
-            spokenLines.push(line);
+            spokenLines.push(_expandNums(line));
           } else if (/^[+]/.test(line)) {
-            spokenLines.push((operators.plus || 'plus') + ' ' + line.slice(1).trim());
+            spokenLines.push((operators.plus || 'plus') + ' ' + _expandNums(line.slice(1).trim()));
           } else if (/^[-]/.test(line)) {
-            spokenLines.push((operators.minus || 'minus') + ' ' + line.slice(1).trim());
+            spokenLines.push((operators.minus || 'minus') + ' ' + _expandNums(line.slice(1).trim()));
           } else if (/^[×x*]/.test(line)) {
-            spokenLines.push((operators.times || 'times') + ' ' + line.slice(1).trim());
+            spokenLines.push((operators.times || 'times') + ' ' + _expandNums(line.slice(1).trim()));
           } else if (/^[÷/]/.test(line)) {
-            spokenLines.push((operators.divide || 'divided by') + ' ' + line.slice(1).trim());
+            spokenLines.push((operators.divide || 'divided by') + ' ' + _expandNums(line.slice(1).trim()));
           } else {
-            spokenLines.push(line);
+            spokenLines.push(_expandNums(line));
           }
         });
         if (spokenLines.length) spokenLines.push(operators.equals || 'equals');
