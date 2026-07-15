@@ -50,6 +50,18 @@ class StudentProfile(models.Model):
         managed = False
 
 
+class StudentSpeedPrefs(models.Model):
+    user = models.OneToOneField(AppUser, on_delete=models.CASCADE, related_name='speed_prefs')
+    voice_rate = models.SmallIntegerField(default=100)
+    line_gap = models.SmallIntegerField(default=630)
+    danger_zone = models.BooleanField(default=False)
+    dz_voice_rate = models.SmallIntegerField(default=160)
+    dz_line_gap = models.SmallIntegerField(default=30)
+
+    class Meta:
+        db_table = 'student_speed_prefs'
+
+
 class LessonType(models.Model):
     grade = models.ForeignKey(Grade, on_delete=models.CASCADE, db_column='grade_id', related_name='lesson_types')
     lesson_name = models.CharField(max_length=120)

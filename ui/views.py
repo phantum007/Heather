@@ -29,6 +29,7 @@ from core.models import (
     Question,
     StudentAnswer,
     StudentProfile,
+    StudentSpeedPrefs,
     SubLesson,
     SubLessonTypeMaster,
     Toy,
@@ -1405,6 +1406,7 @@ def student_assignments(request):
         lesson_tracks = _build_student_lesson_tracks(selected_assignment.lesson)
         unit_attempt_map = _serialize_unit_attempts(user.id, selected_assignment.id, lesson_tracks)
 
+    speed_prefs = StudentSpeedPrefs.objects.filter(user_id=user.id).first()
     return render(
         request,
         'ui/student_assignments.html',
@@ -1417,6 +1419,7 @@ def student_assignments(request):
             'selected_assignment': selected_assignment,
             'lesson_tracks': lesson_tracks,
             'unit_attempt_map': unit_attempt_map,
+            'speed_prefs': speed_prefs,
         },
     )
 
@@ -1664,6 +1667,25 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
         _log.info('Unit completion email sent for attempt %s to %s', attempt_id, recipients)
     except Exception as _exc:
         _log.error('Unit completion email failed for attempt %s: %s', attempt_id, _exc)
+
+
+@require_http_methods(['POST'])
+def student_save_speed_prefs(request):
+    user, response = _student_guard(request)
+    if response:
+        return response
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'message': 'Invalid JSON.'}, status=400)
+    prefs, _ = StudentSpeedPrefs.objects.get_or_create(user_id=user.id)
+    prefs.voice_rate = int(data.get('voice_rate', prefs.voice_rate))
+    prefs.line_gap = int(data.get('line_gap', prefs.line_gap))
+    prefs.danger_zone = bool(data.get('danger_zone', prefs.danger_zone))
+    prefs.dz_voice_rate = int(data.get('dz_voice_rate', prefs.dz_voice_rate))
+    prefs.dz_line_gap = int(data.get('dz_line_gap', prefs.dz_line_gap))
+    prefs.save()
+    return JsonResponse({'ok': True})
 
 
 @require_http_methods(['POST'])
