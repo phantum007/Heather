@@ -254,6 +254,9 @@ def login_view(request):
             if user.role == 'teacher':
                 return redirect('ui-teacher-dashboard')
             if user.role == 'student':
+                prefs = StudentSpeedPrefs.objects.filter(user_id=user.id).first()
+                if prefs and prefs.must_change_password:
+                    return redirect('ui-student-force-change-password')
                 return redirect('ui-student-assignments')
         else:
             messages.error(request, 'Invalid credentials')
@@ -564,6 +567,19 @@ def teacher_add_student(request):
                     'Student could not be created because the database is out of sync. Please redeploy and run migrations, then try again.',
                 )
             else:
+                StudentSpeedPrefs.objects.update_or_create(
+                    user_id=created_user.id,
+                    defaults={'must_change_password': True},
+                )
+                from django.core import signing as _signing
+                _token = _signing.dumps({'uid': created_user.id}, salt='welcome-set-password')
+                _set_pw_url = request.build_absolute_uri(f'/student/set-password/{_token}/')
+                import threading as _t2
+                _t2.Thread(
+                    target=_send_welcome_email,
+                    args=(f'{first_name} {last_name}'.strip(), email, _set_pw_url),
+                    daemon=True,
+                ).start()
                 messages.success(request, 'Student onboarded successfully.')
                 return redirect('ui-teacher-students')
 
@@ -1434,7 +1450,7 @@ def student_assignments(request):
         lesson_tracks = _build_student_lesson_tracks(selected_assignment.lesson)
         unit_attempt_map = _serialize_unit_attempts(user.id, selected_assignment.id, lesson_tracks)
 
-    speed_prefs = StudentSpeedPrefs.objects.filter(user_id=user.id).first()
+    speed_prefs, _ = StudentSpeedPrefs.objects.get_or_create(user_id=user.id)
     return render(
         request,
         'ui/student_assignments.html',
@@ -1647,6 +1663,94 @@ def _send_assignment_notification_email(student_name, student_email, parent_emai
         _log.info('Assignment email sent for student %s to %s', student_name, recipients)
     except Exception as _exc:
         _log.error('Assignment email failed for student %s: %s', student_name, _exc)
+
+
+def _send_welcome_email(student_name, student_email, set_password_url):
+    import logging
+    from django.core.mail import EmailMultiAlternatives
+    from django.conf import settings as _s
+
+    _log = logging.getLogger(__name__)
+    all_recipients = getattr(_s, 'UNIT_REPORT_RECIPIENTS', [])
+    recipients = [r for r in all_recipients if 'heatherwatson' not in r]
+    if not recipients:
+        _log.warning('Welcome email: no eligible recipients configured.')
+        return
+    try:
+        first_name = student_name.split()[0] if student_name else 'there'
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A 0%,#0F766E 60%,#F97316 100%);padding:36px 40px;text-align:center;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="160" height="48" style="display:inline-block;">
+        <defs>
+          <linearGradient id="wg" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#0F172A"/>
+            <stop offset="50%" stop-color="#0F766E"/>
+            <stop offset="100%" stop-color="#F97316"/>
+          </linearGradient>
+        </defs>
+        <rect width="200" height="60" rx="8" fill="#ffffff" opacity="0.15"/>
+        <text x="100" y="38" text-anchor="middle" font-size="22" font-weight="800"
+              font-family="'Segoe UI',Arial,sans-serif" fill="#ffffff" letter-spacing="1">AbacusBlaze</text>
+      </svg>
+      <h1 style="color:#ffffff;margin:16px 0 0;font-size:22px;font-weight:700;">Welcome to AbacusBlaze!</h1>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:40px;">
+      <p style="color:#1e293b;font-size:16px;margin:0 0 16px;">Hi <strong>{first_name}</strong>,</p>
+      <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 16px;">
+        Your account has been created on <strong>AbacusBlaze</strong> by your teacher. You're all set to start your abacus learning journey!
+      </p>
+      <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px;">
+        To get started, please set your own password by clicking the button below. This link is valid for <strong>7 days</strong>.
+      </p>
+      <div style="text-align:center;margin:32px 0;">
+        <a href="{set_password_url}"
+           style="display:inline-block;background:linear-gradient(135deg,#0F766E,#F97316);color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;font-weight:700;letter-spacing:0.5px;">
+          Set My Password
+        </a>
+      </div>
+      <p style="color:#94a3b8;font-size:13px;line-height:1.5;margin:24px 0 0;">
+        If you can't click the button, copy and paste this link into your browser:<br>
+        <span style="color:#0F766E;word-break:break-all;">{set_password_url}</span>
+      </p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0;">
+      <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 8px;">
+        Once you've set your password, log in at your portal and explore your lessons. Best of luck — you've got this!
+      </p>
+      <p style="color:#475569;font-size:15px;margin:0;">Happy learning,<br><strong style="color:#0F766E;">The AbacusBlaze Team</strong></p>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A,#0F766E);padding:20px 40px;text-align:center;">
+      <p style="color:#94a3b8;font-size:12px;margin:0;">AbacusBlaze &mdash; Empowering young minds through mental math</p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+        text_body = (
+            f'Welcome to AbacusBlaze, {student_name}!\n\n'
+            f'Your account has been created. Set your password here:\n{set_password_url}\n\n'
+            'This link is valid for 7 days.\n\nHappy learning,\nAbacusBlaze'
+        )
+        subject = f'Welcome to AbacusBlaze, {first_name}!'
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=recipients)
+        msg.attach_alternative(html, 'text/html')
+        msg.send(fail_silently=False)
+        _log.info('Welcome email sent for %s to %s', student_name, recipients)
+    except Exception as _exc:
+        _log.error('Welcome email failed for %s: %s', student_name, _exc)
 
 
 def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_name, attempt_number, elapsed_seconds, coins_awarded=0):
@@ -2564,3 +2668,63 @@ def tts_synthesize(request):
 
     audio_b64 = base64.b64encode(audio_bytes).decode('ascii')
     return JsonResponse({'audio': f'data:audio/mpeg;base64,{audio_b64}'})
+
+
+@require_http_methods(['GET', 'POST'])
+def student_force_change_password(request):
+    user, response = _student_guard(request)
+    if response:
+        return response
+
+    prefs = StudentSpeedPrefs.objects.filter(user_id=user.id).first()
+    if not prefs or not prefs.must_change_password:
+        return redirect('ui-student-assignments')
+
+    if request.method == 'POST':
+        new_password = request.POST.get('new_password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
+        if not new_password:
+            messages.error(request, 'New password is required.')
+        elif new_password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+        elif len(new_password) < 6:
+            messages.error(request, 'Password must be at least 6 characters.')
+        else:
+            user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            user.save(update_fields=['password'])
+            prefs.must_change_password = False
+            prefs.save(update_fields=['must_change_password'])
+            messages.success(request, 'Password updated! Welcome to AbacusBlaze.')
+            return redirect('ui-student-assignments')
+
+    return render(request, 'ui/student_force_change_password.html')
+
+
+@require_http_methods(['GET', 'POST'])
+def student_set_password_via_token(request, token):
+    from django.core import signing as _signing
+    try:
+        data = _signing.loads(token, max_age=7 * 24 * 3600, salt='welcome-set-password')
+        user_id = data['uid']
+        user = AppUser.objects.get(id=user_id)
+    except Exception:
+        return render(request, 'ui/set_password_invalid.html', status=400)
+
+    if request.method == 'POST':
+        new_password = request.POST.get('new_password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
+        if not new_password:
+            messages.error(request, 'New password is required.')
+        elif new_password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+        elif len(new_password) < 6:
+            messages.error(request, 'Password must be at least 6 characters.')
+        else:
+            user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            user.save(update_fields=['password'])
+            StudentSpeedPrefs.objects.filter(user_id=user.id).update(must_change_password=False)
+            request.session[SESSION_USER_ID] = user.id
+            messages.success(request, 'Password set! Welcome to AbacusBlaze.')
+            return redirect('ui-student-assignments')
+
+    return render(request, 'ui/student_set_password.html', {'user_name': user.name})

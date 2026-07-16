@@ -59,6 +59,7 @@ class StudentSpeedPrefs(models.Model):
     danger_zone = models.BooleanField(default=False)
     dz_voice_rate = models.SmallIntegerField(default=160)
     dz_line_gap = models.SmallIntegerField(default=10)
+    must_change_password = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'student_speed_prefs'
