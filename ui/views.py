@@ -820,6 +820,34 @@ def teacher_create_assignment(request):
                         )
                     )
                 Assignment.objects.bulk_create(assignments_to_create)
+                if assignments_to_create and selected_student:
+                    import threading as _t
+                    assigned_lesson_ids = set(selected_lesson_ids_int)
+                    lessons_data = []
+                    for lesson in lessons:
+                        if lesson.id not in assigned_lesson_ids:
+                            continue
+                        sub_lessons = [
+                            {'name': sl.sub_lesson_name, 'unit_count': sl.units.count()}
+                            for sl in lesson.sub_lessons.all()
+                        ]
+                        lessons_data.append({'name': lesson.lesson_name, 'sub_lessons': sub_lessons})
+                    _s_name = (
+                        f'{selected_student.first_name or ""} {selected_student.last_name or ""}'.strip()
+                        or selected_student.user.name
+                    )
+                    _t.Thread(
+                        target=_send_assignment_notification_email,
+                        args=(
+                            _s_name,
+                            selected_student.user.email,
+                            selected_student.parent_email or '',
+                            lessons_data,
+                            assignment_kind,
+                            available_on,
+                        ),
+                        daemon=True,
+                    ).start()
             if removed_previous_grade_count and replaced_count:
                 messages.success(
                     request,
@@ -1422,6 +1450,203 @@ def student_assignments(request):
             'speed_prefs': speed_prefs,
         },
     )
+
+
+def _send_assignment_notification_email(student_name, student_email, parent_email, lessons_data, assignment_kind, available_on):
+    import logging
+    from django.core.mail import EmailMultiAlternatives
+    from django.conf import settings as _s
+
+    _log = logging.getLogger(__name__)
+    base_recipients = getattr(_s, 'UNIT_REPORT_RECIPIENTS', [])
+    extra = [e for e in [student_email, parent_email] if e and e not in base_recipients]
+    recipients = base_recipients + extra
+    if not recipients:
+        return
+
+    try:
+        kind_label = 'Classroom' if assignment_kind == 'classroom' else 'Homework'
+        total_lessons = len(lessons_data)
+
+        lesson_rows = ''
+        for idx, lesson in enumerate(lessons_data):
+            row_bg = '#ffffff' if idx % 2 == 0 else '#f7f9fc'
+            sub_lines = ''.join(
+                f'<div style="font-size:12px;color:#64748b;margin-top:3px;">&#8226; {sl["name"]} — {sl["unit_count"]} unit{"s" if sl["unit_count"] != 1 else ""}</div>'
+                for sl in lesson['sub_lessons']
+            )
+            lesson_rows += (
+                f'<tr style="background:{row_bg};">'
+                f'<td style="padding:12px 16px;font-weight:bold;color:#0f172a;border-bottom:1px solid #e2e8f0;">'
+                f'Lesson {lesson["name"]}'
+                f'{sub_lines}'
+                f'</td>'
+                f'<td style="padding:12px 16px;text-align:center;color:#1565c0;font-weight:bold;font-size:20px;border-bottom:1px solid #e2e8f0;">'
+                f'{sum(sl["unit_count"] for sl in lesson["sub_lessons"])}'
+                f'</td>'
+                f'</tr>'
+            )
+
+        available_row = ''
+        if assignment_kind == 'classroom' and available_on:
+            available_row = f'<tr><td style="padding:10px 14px;color:#666;border-bottom:1px solid #eee;">Available From</td><td style="padding:10px 14px;color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{available_on}</td></tr>'
+
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>New Assignment</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:30px 0;">
+<tr><td align="center">
+
+<table width="680" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 5px 20px rgba(0,0,0,.1);">
+
+  <!-- Header -->
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A 0%,#0F766E 55%,#F97316 100%);padding:20px 28px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="left" valign="middle">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td valign="middle" style="padding-right:12px;">
+                  <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" width="48" height="48" style="display:block;">
+                    <rect width="256" height="256" rx="56" fill="url(#asnBg)"/>
+                    <rect x="46" y="40" width="164" height="176" rx="28" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.46)" stroke-width="8"/>
+                    <rect x="80" y="76" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <rect x="80" y="118" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <rect x="80" y="160" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <circle cx="102" cy="81" r="15" fill="#F97316"/>
+                    <circle cx="154" cy="81" r="15" fill="#38BDF8"/>
+                    <circle cx="128" cy="123" r="15" fill="#FB7185"/>
+                    <circle cx="102" cy="165" r="15" fill="#38BDF8"/>
+                    <circle cx="154" cy="165" r="15" fill="#F97316"/>
+                    <path d="M96 198L128 58L160 198" stroke="rgba(255,255,255,0.92)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M108 146H148" stroke="rgba(255,255,255,0.92)" stroke-width="10" stroke-linecap="round"/>
+                    <defs>
+                      <linearGradient id="asnBg" x1="30" y1="22" x2="220" y2="230" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#0F172A"/>
+                        <stop offset="0.55" stop-color="#0F766E"/>
+                        <stop offset="1" stop-color="#F97316"/>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                </td>
+                <td valign="middle" style="color:white;font-size:22px;font-weight:bold;letter-spacing:1px;">AbacusBlaze</td>
+              </tr>
+            </table>
+          </td>
+          <td align="right" style="color:rgba(255,255,255,0.9);font-size:15px;font-weight:bold;">
+            NEW ASSIGNMENT
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Star Banner -->
+  <tr>
+    <td style="background:linear-gradient(90deg,#fffbeb,#fff8e1,#fffbeb);padding:14px 28px;text-align:center;border-bottom:1px solid #fde68a;">
+      <p style="margin:0;font-size:18px;font-weight:bold;color:#92400e;">&#127775; You have a new assignment! &#127775;</p>
+    </td>
+  </tr>
+
+  <!-- Greeting -->
+  <tr>
+    <td style="padding:28px 28px 16px;">
+      <h2 style="margin:0 0 10px;color:#0f172a;font-size:22px;">Hey {student_name}! &#128075;</h2>
+      <p style="font-size:15px;color:#555;line-height:1.7;margin:0;">
+        Your teacher has just assigned you <strong>{total_lessons} new lesson{"s" if total_lessons != 1 else ""}</strong> on
+        <strong>AbacusBlaze</strong>. Log in, pick up where you left off, and give it your best shot!
+      </p>
+    </td>
+  </tr>
+
+  <!-- Assignment Summary -->
+  <tr>
+    <td style="padding:0 28px 24px;">
+      <table width="100%" cellpadding="10" cellspacing="0" style="border-collapse:collapse;font-size:14px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+        <tr style="background:#f7f9fc;">
+          <td style="color:#666;border-bottom:1px solid #eee;">Assignment Type</td>
+          <td style="color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{kind_label}</td>
+        </tr>
+        {available_row}
+        <tr>
+          <td style="color:#666;">Total Lessons</td>
+          <td style="color:#1565c0;font-weight:bold;text-align:right;font-size:18px;">{total_lessons}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Lessons Breakdown -->
+  <tr>
+    <td style="padding:0 28px 28px;">
+      <h3 style="color:#333;margin:0 0 12px;font-size:15px;">&#128218; Assigned Lessons</h3>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
+        <tr style="background:#0F766E;color:white;">
+          <th align="left" style="padding:10px 16px;font-weight:600;">Lesson</th>
+          <th align="center" style="padding:10px 16px;font-weight:600;">Units</th>
+        </tr>
+        {lesson_rows}
+      </table>
+    </td>
+  </tr>
+
+  <!-- Best of Luck -->
+  <tr>
+    <td style="padding:0 28px 32px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;">
+        <tr>
+          <td style="padding:22px 24px;text-align:center;">
+            <p style="margin:0 0 8px;font-size:28px;">&#127942;</p>
+            <p style="margin:0 0 6px;font-size:18px;font-weight:bold;color:#1d4ed8;">Best of Luck!</p>
+            <p style="margin:0;font-size:14px;color:#334155;line-height:1.6;">
+              Every practice session makes you sharper and faster.<br>
+              You&#39;ve got this — go show that abacus who&#39;s boss! &#128170;
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A 0%,#0F766E 55%,#F97316 100%);color:white;padding:20px 28px;text-align:center;">
+      <h3 style="margin:0 0 6px;">AbacusBlaze</h3>
+      <p style="margin:0;font-size:12px;opacity:.8;">This is an automated notification. Please do not reply to this email.</p>
+    </td>
+  </tr>
+
+</table>
+
+</td></tr>
+</table>
+
+</body>
+</html>"""
+
+        subject = f'AbacusBlaze — New assignment for {student_name}'
+        text_body = (
+            f'Hi {student_name},\n\n'
+            f'Your teacher has assigned you {total_lessons} new lesson(s) on AbacusBlaze.\n'
+            f'Type: {kind_label}\n'
+            + (f'Available from: {available_on}\n' if assignment_kind == 'classroom' and available_on else '')
+            + '\nLessons:\n'
+            + ''.join(f'- Lesson {l["name"]}\n' for l in lessons_data)
+            + '\nBest of luck — keep practising!\nAbacusBlaze'
+        )
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=recipients)
+        msg.attach_alternative(html, 'text/html')
+        msg.send(fail_silently=False)
+        _log.info('Assignment email sent for student %s to %s', student_name, recipients)
+    except Exception as _exc:
+        _log.error('Assignment email failed for student %s: %s', student_name, _exc)
 
 
 def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_name, attempt_number, elapsed_seconds, coins_awarded=0):
