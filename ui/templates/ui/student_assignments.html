@@ -746,24 +746,43 @@
       }
 
       let _savePrefsTimer = null;
+      let _prefsDirty = false;
+
+      function _prefsPayload() {
+        return JSON.stringify({
+          voice_lang: window.localStorage.getItem('practiceVoiceLang') || 'en-US',
+          voice_name: window.localStorage.getItem('practiceVoiceName') || 'en-US-Neural2-D',
+          voice_rate: Number(window.localStorage.getItem('practiceVoiceRate') || 100),
+          line_gap: Number(window.localStorage.getItem('practiceLineGap') || 500),
+          danger_zone: window.localStorage.getItem('practiceDangerZone') === 'true',
+          dz_voice_rate: Number(window.localStorage.getItem('practiceDZVoiceRate') || 160),
+          dz_line_gap: Number(window.localStorage.getItem('practiceDZLineGap') || 10),
+        });
+      }
+
       function savePrefsToServer() {
+        _prefsDirty = true;
         clearTimeout(_savePrefsTimer);
         _savePrefsTimer = setTimeout(function () {
+          _prefsDirty = false;
           fetch('{% url "ui-student-speed-prefs" %}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-            body: JSON.stringify({
-              voice_lang: window.localStorage.getItem('practiceVoiceLang') || 'en-US',
-              voice_name: window.localStorage.getItem('practiceVoiceName') || 'en-US-Neural2-D',
-              voice_rate: Number(window.localStorage.getItem('practiceVoiceRate') || 100),
-              line_gap: Number(window.localStorage.getItem('practiceLineGap') || 500),
-              danger_zone: window.localStorage.getItem('practiceDangerZone') === 'true',
-              dz_voice_rate: Number(window.localStorage.getItem('practiceDZVoiceRate') || 160),
-              dz_line_gap: Number(window.localStorage.getItem('practiceDZLineGap') || 10),
-            }),
+            body: _prefsPayload(),
           }).catch(function () {});
         }, 800);
       }
+
+      window.addEventListener('beforeunload', function () {
+        if (!_prefsDirty) return;
+        clearTimeout(_savePrefsTimer);
+        fetch('{% url "ui-student-speed-prefs" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+          body: _prefsPayload(),
+          keepalive: true,
+        }).catch(function () {});
+      });
 
       function getVoiceRateLimits() {
         return dangerZone ? { min: 160, max: 200, step: 5 } : { min: 50, max: 150, step: 5 };
