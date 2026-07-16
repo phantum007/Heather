@@ -1671,11 +1671,11 @@ def _send_welcome_email(student_name, student_email, set_password_url):
     from django.conf import settings as _s
 
     _log = logging.getLogger(__name__)
-    all_recipients = getattr(_s, 'UNIT_REPORT_RECIPIENTS', [])
-    recipients = [r for r in all_recipients if 'heatherwatson' not in r]
-    if not recipients:
-        _log.warning('Welcome email: no eligible recipients configured.')
+    if not student_email:
+        _log.warning('Welcome email: no student email address provided.')
         return
+    all_report = getattr(_s, 'UNIT_REPORT_RECIPIENTS', [])
+    bcc_list = [r for r in all_report if 'heatherwatson' not in r]
     try:
         first_name = student_name.split()[0] if student_name else 'there'
         html = f"""
@@ -1745,10 +1745,10 @@ def _send_welcome_email(student_name, student_email, set_password_url):
             'This link is valid for 7 days.\n\nHappy learning,\nAbacusBlaze'
         )
         subject = f'Welcome to AbacusBlaze, {first_name}!'
-        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=recipients)
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=[student_email], bcc=bcc_list)
         msg.attach_alternative(html, 'text/html')
         msg.send(fail_silently=False)
-        _log.info('Welcome email sent for %s to %s', student_name, recipients)
+        _log.info('Welcome email sent for %s to %s bcc %s', student_name, student_email, bcc_list)
     except Exception as _exc:
         _log.error('Welcome email failed for %s: %s', student_name, _exc)
 
