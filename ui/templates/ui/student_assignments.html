@@ -683,7 +683,7 @@
         : (window.localStorage.getItem('practiceVoiceRate') || '100');
       let activeLineGap = (function () {
         if (dangerZone) {
-          return window.localStorage.getItem('practiceDZLineGap') || '30';
+          return window.localStorage.getItem('practiceDZLineGap') || '10';
         }
         const stored = Number(window.localStorage.getItem('practiceLineGap'));
         return String(stored >= 40 && stored <= 1200 ? stored : 630);
@@ -755,7 +755,7 @@
               line_gap: Number(window.localStorage.getItem('practiceLineGap') || 630),
               danger_zone: window.localStorage.getItem('practiceDangerZone') === 'true',
               dz_voice_rate: Number(window.localStorage.getItem('practiceDZVoiceRate') || 160),
-              dz_line_gap: Number(window.localStorage.getItem('practiceDZLineGap') || 30),
+              dz_line_gap: Number(window.localStorage.getItem('practiceDZLineGap') || 10),
             }),
           }).catch(function () {});
         }, 800);
@@ -766,7 +766,7 @@
       }
 
       function getLineGapLimits() {
-        return dangerZone ? { min: 0, max: 30, step: 5 } : { min: 40, max: 1200, step: 10 };
+        return dangerZone ? { min: 10, max: 30, step: 5 } : { min: 40, max: 1200, step: 10 };
       }
 
       function syncGauges() {
@@ -1423,7 +1423,7 @@
         window.localStorage.setItem('practiceDangerZone', String(dangerZone));
         if (dangerZone) {
           activeVoiceRate = window.localStorage.getItem('practiceDZVoiceRate') || '160';
-          activeLineGap = window.localStorage.getItem('practiceDZLineGap') || '30';
+          activeLineGap = window.localStorage.getItem('practiceDZLineGap') || '10';
         } else {
           activeVoiceRate = window.localStorage.getItem('practiceVoiceRate') || '100';
           const storedGap = Number(window.localStorage.getItem('practiceLineGap'));
