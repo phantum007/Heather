@@ -258,7 +258,7 @@
   {{ unit_attempt_map|json_script:"unit-attempt-map" }}
   {% if speed_prefs %}
   <script id="speed-prefs-data" type="application/json">
-    {"voice_rate":{{ speed_prefs.voice_rate }},"line_gap":{{ speed_prefs.line_gap }},"danger_zone":{{ speed_prefs.danger_zone|yesno:"true,false" }},"dz_voice_rate":{{ speed_prefs.dz_voice_rate }},"dz_line_gap":{{ speed_prefs.dz_line_gap }}}
+    {"voice_lang":"{{ speed_prefs.voice_lang|escapejs }}","voice_name":"{{ speed_prefs.voice_name|escapejs }}","voice_rate":{{ speed_prefs.voice_rate }},"line_gap":{{ speed_prefs.line_gap }},"danger_zone":{{ speed_prefs.danger_zone|yesno:"true,false" }},"dz_voice_rate":{{ speed_prefs.dz_voice_rate }},"dz_line_gap":{{ speed_prefs.dz_line_gap }}}
   </script>
   {% endif %}
 {% else %}
@@ -665,6 +665,8 @@
         if (!el) return;
         try {
           const p = JSON.parse(el.textContent);
+          if (p.voice_lang) window.localStorage.setItem('practiceVoiceLang', p.voice_lang);
+          if (p.voice_name) window.localStorage.setItem('practiceVoiceName', p.voice_name);
           window.localStorage.setItem('practiceDangerZone', String(p.danger_zone));
           window.localStorage.setItem('practiceVoiceRate', String(p.voice_rate));
           window.localStorage.setItem('practiceLineGap', String(p.line_gap));
@@ -673,10 +675,10 @@
         } catch (e) {}
       }());
 
-      let activeVoiceLang = window.localStorage.getItem('practiceVoiceLang') || 'en-GB';
-      if (!GCLOUD_VOICES[activeVoiceLang]) activeVoiceLang = 'en-GB';
+      let activeVoiceLang = window.localStorage.getItem('practiceVoiceLang') || 'en-US';
+      if (!GCLOUD_VOICES[activeVoiceLang]) activeVoiceLang = 'en-US';
       let activeLanguage = LANG_TO_TRANSLATION[activeVoiceLang] || 'en';
-      let activeVoiceName = window.localStorage.getItem('practiceVoiceName') || '';
+      let activeVoiceName = window.localStorage.getItem('practiceVoiceName') || 'en-US-Neural2-D';
       let dangerZone = window.localStorage.getItem('practiceDangerZone') === 'true';
       let activeVoiceRate = dangerZone
         ? (window.localStorage.getItem('practiceDZVoiceRate') || '160')
@@ -686,7 +688,7 @@
           return window.localStorage.getItem('practiceDZLineGap') || '10';
         }
         const stored = Number(window.localStorage.getItem('practiceLineGap'));
-        return String(stored >= 40 && stored <= 1200 ? stored : 630);
+        return String(stored >= 40 && stored <= 1200 ? stored : 500);
       }());
       let ttsAudio = null;
       const ttsCache = {};
@@ -751,8 +753,10 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
             body: JSON.stringify({
+              voice_lang: window.localStorage.getItem('practiceVoiceLang') || 'en-US',
+              voice_name: window.localStorage.getItem('practiceVoiceName') || 'en-US-Neural2-D',
               voice_rate: Number(window.localStorage.getItem('practiceVoiceRate') || 100),
-              line_gap: Number(window.localStorage.getItem('practiceLineGap') || 630),
+              line_gap: Number(window.localStorage.getItem('practiceLineGap') || 500),
               danger_zone: window.localStorage.getItem('practiceDangerZone') === 'true',
               dz_voice_rate: Number(window.localStorage.getItem('practiceDZVoiceRate') || 160),
               dz_line_gap: Number(window.localStorage.getItem('practiceDZLineGap') || 10),
@@ -1328,9 +1332,10 @@
       }
 
       languageSelect.addEventListener('change', function () {
-        activeVoiceLang = GCLOUD_VOICES[languageSelect.value] ? languageSelect.value : 'en-GB';
+        activeVoiceLang = GCLOUD_VOICES[languageSelect.value] ? languageSelect.value : 'en-US';
         activeLanguage = LANG_TO_TRANSLATION[activeVoiceLang] || 'en';
         window.localStorage.setItem('practiceVoiceLang', activeVoiceLang);
+        savePrefsToServer();
         applyLanguage();
         renderQuestionNav();
         if (summary.classList.contains('is-visible')) {
@@ -1354,6 +1359,7 @@
         } else {
           window.localStorage.removeItem('practiceVoiceName');
         }
+        savePrefsToServer();
       });
 
       function setVoiceRate(newVal) {
@@ -1427,7 +1433,7 @@
         } else {
           activeVoiceRate = window.localStorage.getItem('practiceVoiceRate') || '100';
           const storedGap = Number(window.localStorage.getItem('practiceLineGap'));
-          activeLineGap = String(storedGap >= 40 && storedGap <= 1200 ? storedGap : 630);
+          activeLineGap = String(storedGap >= 40 && storedGap <= 1200 ? storedGap : 500);
         }
         voiceRateSelect.value = activeVoiceRate;
         voiceRateValue.textContent = formatVoiceRateValue(activeVoiceRate);

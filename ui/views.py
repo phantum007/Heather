@@ -1957,6 +1957,10 @@ def student_save_speed_prefs(request):
     except Exception:
         return JsonResponse({'message': 'Invalid JSON.'}, status=400)
     prefs, _ = StudentSpeedPrefs.objects.get_or_create(user_id=user.id)
+    if data.get('voice_lang'):
+        prefs.voice_lang = str(data['voice_lang'])[:20]
+    if data.get('voice_name'):
+        prefs.voice_name = str(data['voice_name'])[:60]
     prefs.voice_rate = int(data.get('voice_rate', prefs.voice_rate))
     prefs.line_gap = int(data.get('line_gap', prefs.line_gap))
     prefs.danger_zone = bool(data.get('danger_zone', prefs.danger_zone))
