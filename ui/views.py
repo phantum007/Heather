@@ -1424,7 +1424,7 @@ def student_assignments(request):
     )
 
 
-def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_name, attempt_number, elapsed_seconds):
+def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_name, attempt_number, elapsed_seconds, coins_awarded=0):
     import logging, threading
     from django.core.mail import EmailMultiAlternatives
     from django.conf import settings as _s
@@ -1476,6 +1476,30 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
         status_badge_color = '#155724' if passed else '#721c24'
         status_text = 'PASSED' if passed else 'NEEDS PRACTICE'
 
+        coins_section = ''
+        if coins_awarded > 0:
+            coins_section = f"""
+  <!-- Coins -->
+  <tr>
+    <td style="padding:0 28px 28px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#fff8e1,#fff3cd);border:1px solid #ffc107;border-radius:12px;">
+        <tr>
+          <td style="padding:18px 22px;">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="font-size:32px;padding-right:14px;vertical-align:middle;">&#129689;</td>
+                <td valign="middle">
+                  <p style="margin:0;font-size:16px;font-weight:bold;color:#7c5a00;">Coins Earned</p>
+                  <p style="margin:4px 0 0;font-size:24px;font-weight:bold;color:#c67f00;">+{coins_awarded} coins</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>"""
+
         html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1492,11 +1516,38 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
 
   <!-- Header -->
   <tr>
-    <td style="background:#0d6efd;padding:20px 28px;">
+    <td style="background:linear-gradient(135deg,#0F172A 0%,#0F766E 55%,#F97316 100%);padding:20px 28px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td align="left" style="color:white;font-size:22px;font-weight:bold;letter-spacing:1px;">
-            &#129518; Heather Abacus
+          <td align="left" valign="middle">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td valign="middle" style="padding-right:12px;">
+                  <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" width="48" height="48" style="display:block;">
+                    <rect width="256" height="256" rx="56" fill="url(#emailBrandBg)"/>
+                    <rect x="46" y="40" width="164" height="176" rx="28" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.46)" stroke-width="8"/>
+                    <rect x="80" y="76" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <rect x="80" y="118" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <rect x="80" y="160" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <circle cx="102" cy="81" r="15" fill="#F97316"/>
+                    <circle cx="154" cy="81" r="15" fill="#38BDF8"/>
+                    <circle cx="128" cy="123" r="15" fill="#FB7185"/>
+                    <circle cx="102" cy="165" r="15" fill="#38BDF8"/>
+                    <circle cx="154" cy="165" r="15" fill="#F97316"/>
+                    <path d="M96 198L128 58L160 198" stroke="rgba(255,255,255,0.92)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M108 146H148" stroke="rgba(255,255,255,0.92)" stroke-width="10" stroke-linecap="round"/>
+                    <defs>
+                      <linearGradient id="emailBrandBg" x1="30" y1="22" x2="220" y2="230" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#0F172A"/>
+                        <stop offset="0.55" stop-color="#0F766E"/>
+                        <stop offset="1" stop-color="#F97316"/>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                </td>
+                <td valign="middle" style="color:white;font-size:22px;font-weight:bold;letter-spacing:1px;">AbacusBlaze</td>
+              </tr>
+            </table>
           </td>
           <td align="right" style="color:rgba(255,255,255,0.9);font-size:15px;font-weight:bold;">
             UNIT PROGRESS REPORT
@@ -1639,11 +1690,13 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
     </td>
   </tr>
 
+  {coins_section}
+
   <!-- Footer -->
   <tr>
-    <td style="background:#0d6efd;color:white;padding:20px 28px;text-align:center;">
+    <td style="background:linear-gradient(135deg,#0F172A 0%,#0F766E 55%,#F97316 100%);color:white;padding:20px 28px;text-align:center;">
       <h3 style="margin:0 0 6px;">Thank You</h3>
-      <p style="margin:0 0 6px;font-size:14px;">Heather Abacus Academy</p>
+      <p style="margin:0 0 6px;font-size:14px;">AbacusBlaze</p>
       <p style="font-size:12px;opacity:.8;margin:0;">This is an automated notification. Please do not reply to this email.</p>
     </td>
   </tr>
@@ -1656,7 +1709,7 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
 </body>
 </html>"""
 
-        subject = f'Heather Abacus — {student_name} {"passed" if passed else "completed"} {unit_name}'
+        subject = f'AbacusBlaze — {student_name} {"passed" if passed else "completed"} {unit_name}'
         text_body = (
             f'{student_name} {"passed" if passed else "completed"} {unit_name}\n'
             f'Score: {correct}/{total} ({score_pct}%) | Attempt #{attempt_number} | Time: {time_str}\n'
@@ -1812,6 +1865,7 @@ def student_submit_unit_question(request):
                     sub_lesson.sub_lesson_name if sub_lesson else '',
                     attempt.attempt_number,
                     attempt.elapsed_seconds or 0,
+                    coins_awarded,
                 ),
                 daemon=True,
             ).start()
