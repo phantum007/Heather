@@ -1356,8 +1356,8 @@
         const isFlash = activePracticeMode === 'flash';
         const voiceRateCard = document.getElementById('voice-rate-card');
         const dzRow = document.getElementById('danger-zone-row');
-        if (voiceRateCard) voiceRateCard.hidden = isFlash;
-        if (dzRow) dzRow.hidden = isFlash;
+        if (voiceRateCard) voiceRateCard.style.display = isFlash ? 'none' : '';
+        if (dzRow) dzRow.style.display = isFlash ? 'none' : '';
       }
 
       languageSelect.addEventListener('change', function () {
