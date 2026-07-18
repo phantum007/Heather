@@ -13,6 +13,7 @@ class AppUser(models.Model):
     email = models.EmailField(max_length=180, unique=True)
     password = models.TextField()
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    username = models.CharField(max_length=60, unique=True, null=True, blank=True)
 
     class Meta:
         db_table = 'users'

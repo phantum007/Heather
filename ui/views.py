@@ -252,6 +252,8 @@ def login_view(request):
 
         if user and bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8')):
             request.session[SESSION_USER_ID] = user.id
+            import threading as _lt
+            _lt.Thread(target=_send_login_alert_email, args=(user, request), daemon=True).start()
             if user.role == 'teacher':
                 return redirect('ui-teacher-dashboard')
             if user.role == 'student':
@@ -1666,6 +1668,92 @@ def _send_assignment_notification_email(student_name, student_email, parent_emai
         _log.error('Assignment email failed for student %s: %s', student_name, _exc)
 
 
+def _send_login_alert_email(user, request):
+    import logging
+    from django.core.mail import EmailMultiAlternatives
+    from django.conf import settings as _s
+    from django.utils import timezone as _tz
+
+    _log = logging.getLogger(__name__)
+    recipients = getattr(_s, 'LOGIN_ALERT_RECIPIENTS', [])
+    if not recipients:
+        return
+    try:
+        is_teacher = user.role == 'teacher'
+        now_str = _tz.now().strftime('%Y-%m-%d %H:%M:%S UTC')
+        ip = (request.META.get('HTTP_X_FORWARDED_FOR', '') or '').split(',')[0].strip() \
+             or request.META.get('REMOTE_ADDR', 'unknown')
+        ua = request.META.get('HTTP_USER_AGENT', 'unknown')
+        username_display = getattr(user, 'username', None) or '(not set)'
+        badge_color = '#dc2626' if is_teacher else '#0F766E'
+        badge_label = 'TEACHER LOGIN — CRITICAL' if is_teacher else 'Student Login'
+        header_gradient = 'linear-gradient(135deg,#7f1d1d,#dc2626)' if is_teacher \
+                          else 'linear-gradient(135deg,#0F172A,#0F766E)'
+
+        html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:24px 0;">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.08);">
+  <tr>
+    <td style="background:{header_gradient};padding:24px 32px;">
+      <span style="display:inline-block;background:rgba(255,255,255,0.18);color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;padding:4px 10px;border-radius:20px;text-transform:uppercase;">{badge_label}</span>
+      <h2 style="color:#fff;margin:10px 0 0;font-size:18px;">AbacusBlaze Login Alert</h2>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:28px 32px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr><td colspan="2" style="padding-bottom:16px;border-bottom:1px solid #e2e8f0;margin-bottom:16px;">
+          <p style="margin:0;color:#64748b;font-size:13px;">A user has just signed in to AbacusBlaze.</p>
+        </td></tr>
+        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;width:140px;">Time</td>
+            <td style="padding:10px 0;color:#1e293b;font-size:13px;font-weight:600;">{now_str}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:10px 8px;color:#64748b;font-size:13px;">Role</td>
+            <td style="padding:10px 8px;font-size:13px;font-weight:700;color:{badge_color};">{user.role.upper()}</td></tr>
+        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;">Name</td>
+            <td style="padding:10px 0;color:#1e293b;font-size:13px;">{user.name}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:10px 8px;color:#64748b;font-size:13px;">Email</td>
+            <td style="padding:10px 8px;color:#1e293b;font-size:13px;">{user.email}</td></tr>
+        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;">Username</td>
+            <td style="padding:10px 0;color:#1e293b;font-size:13px;">{username_display}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:10px 8px;color:#64748b;font-size:13px;">IP Address</td>
+            <td style="padding:10px 8px;color:#1e293b;font-size:13px;font-family:monospace;">{ip}</td></tr>
+        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;vertical-align:top;">User Agent</td>
+            <td style="padding:10px 0;color:#475569;font-size:12px;word-break:break-all;">{ua}</td></tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#f1f5f9;padding:14px 32px;text-align:center;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;">AbacusBlaze automated login alert &mdash; do not reply</p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+        text_body = (
+            f'AbacusBlaze Login Alert\n\n'
+            f'Time: {now_str}\n'
+            f'Role: {user.role.upper()}\n'
+            f'Name: {user.name}\n'
+            f'Email: {user.email}\n'
+            f'Username: {username_display}\n'
+            f'IP: {ip}\n'
+            f'User-Agent: {ua}\n'
+        )
+        subject = f'[{"CRITICAL" if is_teacher else "Login"}] {user.role.title()} login — {user.name} ({user.email})'
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=recipients)
+        msg.attach_alternative(html, 'text/html')
+        msg.send(fail_silently=False)
+    except Exception as _exc:
+        _log.error('Login alert email failed for %s: %s', user.email, _exc)
+
+
 def _send_welcome_email(student_name, student_email, set_password_url):
     import logging
     from django.core.mail import EmailMultiAlternatives
@@ -2671,6 +2759,31 @@ def tts_synthesize(request):
     return JsonResponse({'audio': f'data:audio/mpeg;base64,{audio_b64}'})
 
 
+@require_http_methods(['GET'])
+def student_check_username(request):
+    q = request.GET.get('q', '').strip().lower()
+    if len(q) < 3:
+        return JsonResponse({'available': False, 'error': 'At least 3 characters'})
+    if not re.match(r'^[a-z0-9_]{3,30}$', q):
+        return JsonResponse({'available': False, 'error': 'Letters, numbers and underscores only'})
+    taken = AppUser.objects.filter(username=q).exists()
+    return JsonResponse({'available': not taken})
+
+
+def _validate_username_post(username_raw):
+    """Returns (cleaned, error_string_or_None)."""
+    u = username_raw.strip().lower()
+    if not u:
+        return u, 'Username is required.'
+    if len(u) < 3:
+        return u, 'Username must be at least 3 characters.'
+    if len(u) > 30:
+        return u, 'Username must be 30 characters or fewer.'
+    if not re.match(r'^[a-z0-9_]+$', u):
+        return u, 'Username may only contain letters, numbers and underscores.'
+    return u, None
+
+
 @require_http_methods(['GET', 'POST'])
 def student_force_change_password(request):
     user, response = _student_guard(request)
@@ -2684,21 +2797,28 @@ def student_force_change_password(request):
     if request.method == 'POST':
         new_password = request.POST.get('new_password', '').strip()
         confirm_password = request.POST.get('confirm_password', '').strip()
+        username_raw = request.POST.get('username', '')
+        username, username_err = _validate_username_post(username_raw)
         if not new_password:
             messages.error(request, 'New password is required.')
         elif new_password != confirm_password:
             messages.error(request, 'Passwords do not match.')
         elif len(new_password) < 6:
             messages.error(request, 'Password must be at least 6 characters.')
+        elif username_err:
+            messages.error(request, username_err)
+        elif AppUser.objects.filter(username=username).exclude(id=user.id).exists():
+            messages.error(request, 'That username is already taken.')
         else:
             user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            user.save(update_fields=['password'])
+            user.username = username
+            user.save(update_fields=['password', 'username'])
             prefs.must_change_password = False
             prefs.save(update_fields=['must_change_password'])
             messages.success(request, 'Password updated! Welcome to AbacusBlaze.')
             return redirect('ui-student-assignments')
 
-    return render(request, 'ui/student_force_change_password.html')
+    return render(request, 'ui/student_force_change_password.html', {'username_val': request.POST.get('username', '')})
 
 
 @require_http_methods(['GET', 'POST'])
@@ -2714,18 +2834,28 @@ def student_set_password_via_token(request, token):
     if request.method == 'POST':
         new_password = request.POST.get('new_password', '').strip()
         confirm_password = request.POST.get('confirm_password', '').strip()
+        username_raw = request.POST.get('username', '')
+        username, username_err = _validate_username_post(username_raw)
         if not new_password:
             messages.error(request, 'New password is required.')
         elif new_password != confirm_password:
             messages.error(request, 'Passwords do not match.')
         elif len(new_password) < 6:
             messages.error(request, 'Password must be at least 6 characters.')
+        elif username_err:
+            messages.error(request, username_err)
+        elif AppUser.objects.filter(username=username).exclude(id=user.id).exists():
+            messages.error(request, 'That username is already taken.')
         else:
             user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            user.save(update_fields=['password'])
+            user.username = username
+            user.save(update_fields=['password', 'username'])
             StudentSpeedPrefs.objects.filter(user_id=user.id).update(must_change_password=False)
             request.session[SESSION_USER_ID] = user.id
             messages.success(request, 'Password set! Welcome to AbacusBlaze.')
             return redirect('ui-student-assignments')
 
-    return render(request, 'ui/student_set_password.html', {'user_name': user.name})
+    return render(request, 'ui/student_set_password.html', {
+        'user_name': user.name,
+        'username_val': request.POST.get('username', ''),
+    })

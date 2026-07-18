@@ -140,12 +140,12 @@
             <h4 class="speech-settings-title" id="practice-speed-title" hidden></h4>
             <button type="button" class="practice-close practice-speed-close" id="practice-speed-close" aria-label="Close speed settings">&times;</button>
           </div>
-          <div class="danger-zone-row">
+          <div class="danger-zone-row" id="danger-zone-row">
             <button type="button" class="danger-zone-toggle" id="danger-zone-toggle">Danger zone - OFF</button>
           </div>
 
           <div class="speed-gauge-cards">
-            <div class="speed-gauge-card">
+            <div class="speed-gauge-card" id="voice-rate-card">
               <div class="speed-gauge-card-title"><span id="practice-voice-rate-label">Select voice speed</span></div>
               <div class="speed-gauge-widget">
                 <div class="speed-gauge-scale"></div>
@@ -1298,14 +1298,15 @@
             }
             flashTarget.textContent = sequence[flashIndex] || '';
             flashIndex += 1;
+            const flashMs = Math.max(50, Number(activeLineGap) || 500);
             if (flashIndex < sequence.length) {
-              flashTimeoutId = window.setTimeout(runFlashStep, 3000);
+              flashTimeoutId = window.setTimeout(runFlashStep, flashMs);
             } else {
               flashTimeoutId = window.setTimeout(function () {
                 if (currentToken === flashSequenceToken && flashTarget) {
                   flashTarget.textContent = '';
                 }
-              }, 3000);
+              }, flashMs);
             }
           };
           runFlashStep();
@@ -1346,8 +1347,17 @@
       }
 
       function openSpeedPanel() {
+        updateSpeedPanelForMode();
         speedPanel.removeAttribute('hidden');
         speedToggleButton.classList.add('is-open');
+      }
+
+      function updateSpeedPanelForMode() {
+        const isFlash = activePracticeMode === 'flash';
+        const voiceRateCard = document.getElementById('voice-rate-card');
+        const dzRow = document.getElementById('danger-zone-row');
+        if (voiceRateCard) voiceRateCard.hidden = isFlash;
+        if (dzRow) dzRow.hidden = isFlash;
       }
 
       languageSelect.addEventListener('change', function () {
@@ -1627,6 +1637,7 @@
         questionStatuses = isNewAttempt ? {} : (savedState.statuses || {});
         activePracticeMode = practiceMode || 'default';
         activeAudioMode = Boolean(audioMode);
+        updateSpeedPanelForMode();
         updateAnswerIcon();
         updateUnitCompletionStates();
         const nextUnattemptedIndex = activeQuestions.findIndex((item) => !questionStatuses[String(item.id)]);
