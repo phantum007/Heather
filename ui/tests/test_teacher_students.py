@@ -72,6 +72,8 @@ class TeacherAddStudentTest(SimpleTestCase):
         with p1, p2, err, suc, \
              patch('ui.views.AppUser.objects') as mock_usr, \
              patch('ui.views.StudentProfile.objects'), \
+             patch('ui.views.StudentSpeedPrefs.objects'), \
+             patch('ui.views._send_welcome_email'), \
              patch('ui.views._save_profile_photo', return_value=''), \
              patch('ui.views.bcrypt.hashpw', return_value=b'hashed'), \
              patch('ui.views.transaction.atomic', return_value=ctx):

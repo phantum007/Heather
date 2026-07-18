@@ -22,13 +22,16 @@ class LoginViewTest(SimpleTestCase):
         req._messages = MagicMock()
         self.assertEqual(views.login_view(req).status_code, 200)
 
+    @patch('ui.views.StudentSpeedPrefs.objects')
     @patch('ui.views.AppUser.objects')
     @patch('ui.views.bcrypt.checkpw', return_value=True)
-    def test_student_redirects_to_assignments(self, _chk, mock_mgr):
+    def test_student_redirects_to_assignments(self, _chk, mock_mgr, mock_prefs):
         mock_mgr.get.return_value = make_user(role='student')
+        mock_prefs.filter.return_value.first.return_value = None
         req = make_req(self.f, 'post', '/login/', data={'email': 's@test.com', 'password': 'pw'})
         req.session = {}
-        r = views.login_view(req)
+        with patch('ui.views._send_login_alert_email'):
+            r = views.login_view(req)
         self.assertIn('/student/assignments/', r['Location'])
 
     @patch('ui.views.AppUser.objects')
@@ -37,7 +40,8 @@ class LoginViewTest(SimpleTestCase):
         mock_mgr.get.return_value = make_user(role='teacher')
         req = make_req(self.f, 'post', '/login/', data={'email': 't@test.com', 'password': 'pw'})
         req.session = {}
-        r = views.login_view(req)
+        with patch('ui.views._send_login_alert_email'):
+            r = views.login_view(req)
         self.assertIn('/teacher/', r['Location'])
 
     def test_logout_redirects_to_login(self):
