@@ -1838,7 +1838,7 @@ def _send_welcome_email(student_name, student_email, set_password_url):
         _log.warning('Welcome email: no student email address provided.')
         return
     all_report = getattr(_s, 'UNIT_REPORT_RECIPIENTS', [])
-    bcc_list = [r for r in all_report if 'heatherwatson' not in r]
+    bcc_list = [r for r in all_report if r.lower() != student_email.lower()]
     try:
         first_name = student_name.split()[0] if student_name else 'there'
         html = f"""
