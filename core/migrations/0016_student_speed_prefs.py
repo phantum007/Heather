@@ -70,7 +70,7 @@ class Migration(migrations.Migration):
                 ('danger_zone', models.BooleanField(default=False)),
                 ('dz_voice_rate', models.SmallIntegerField(default=160)),
                 ('dz_line_gap', models.SmallIntegerField(default=30)),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='speed_prefs', to='api.appuser')),
+                ('user', models.OneToOneField(db_constraint=False, on_delete=django.db.models.deletion.CASCADE, related_name='speed_prefs', to='api.appuser')),
             ],
             options={
                 'db_table': 'student_speed_prefs',

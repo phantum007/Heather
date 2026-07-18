@@ -52,7 +52,7 @@ class StudentProfile(models.Model):
 
 
 class StudentSpeedPrefs(models.Model):
-    user = models.OneToOneField(AppUser, on_delete=models.CASCADE, related_name='speed_prefs')
+    user = models.OneToOneField(AppUser, on_delete=models.CASCADE, db_constraint=False, related_name='speed_prefs')
     voice_lang = models.CharField(max_length=20, default='en-US')
     voice_name = models.CharField(max_length=60, default='en-US-Neural2-D')
     voice_rate = models.SmallIntegerField(default=100)

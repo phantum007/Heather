@@ -1671,6 +1671,65 @@ def _send_assignment_notification_email(student_name, student_email, parent_emai
         _log.error('Assignment email failed for student %s: %s', student_name, _exc)
 
 
+def _parse_user_agent(ua_string):
+    """Return (browser, device_type) from a User-Agent string."""
+    ua = ua_string or ''
+    # Browser
+    if 'Edg/' in ua or 'Edge/' in ua:
+        browser = 'Microsoft Edge'
+    elif 'OPR/' in ua or 'Opera/' in ua:
+        browser = 'Opera'
+    elif 'SamsungBrowser/' in ua:
+        browser = 'Samsung Browser'
+    elif 'Chrome/' in ua and 'Chromium' not in ua:
+        browser = 'Google Chrome'
+    elif 'Firefox/' in ua:
+        browser = 'Mozilla Firefox'
+    elif 'Safari/' in ua and 'Chrome' not in ua:
+        browser = 'Apple Safari'
+    elif 'MSIE' in ua or 'Trident/' in ua:
+        browser = 'Internet Explorer'
+    else:
+        browser = 'Unknown Browser'
+    # Device / OS
+    if 'iPhone' in ua:
+        device = 'iPhone (iOS)'
+    elif 'iPad' in ua:
+        device = 'iPad (iOS)'
+    elif 'Android' in ua and 'Mobile' in ua:
+        device = 'Android Phone'
+    elif 'Android' in ua:
+        device = 'Android Tablet'
+    elif 'Windows NT' in ua:
+        device = 'Windows PC'
+    elif 'Macintosh' in ua or 'Mac OS X' in ua:
+        device = 'Mac'
+    elif 'Linux' in ua:
+        device = 'Linux'
+    elif 'CrOS' in ua:
+        device = 'Chromebook'
+    else:
+        device = 'Unknown Device'
+    return browser, device
+
+
+def _geo_lookup(ip):
+    """Return (city, region, country) via ip-api.com (free, no key needed)."""
+    import urllib.request as _ur
+    import urllib.error as _ue
+    if not ip or ip in ('unknown', '127.0.0.1', '::1'):
+        return 'localhost', '', 'local'
+    try:
+        url = f'http://ip-api.com/json/{ip}?fields=status,country,regionName,city'
+        with _ur.urlopen(url, timeout=4) as resp:
+            data = json.loads(resp.read().decode())
+        if data.get('status') == 'success':
+            return data.get('city', '?'), data.get('regionName', ''), data.get('country', '?')
+    except (_ue.URLError, Exception):
+        pass
+    return '?', '', '?'
+
+
 def _send_login_alert_email(user, request):
     import logging
     from django.core.mail import EmailMultiAlternatives
@@ -1688,6 +1747,9 @@ def _send_login_alert_email(user, request):
              or request.META.get('REMOTE_ADDR', 'unknown')
         ua = request.META.get('HTTP_USER_AGENT', 'unknown')
         username_display = getattr(user, 'username', None) or '(not set)'
+        browser, device = _parse_user_agent(ua)
+        city, region, country = _geo_lookup(ip)
+        location = ', '.join(filter(None, [city, region, country]))
         badge_color = '#dc2626' if is_teacher else '#0F766E'
         badge_label = 'TEACHER LOGIN — CRITICAL' if is_teacher else 'Student Login'
         header_gradient = 'linear-gradient(135deg,#7f1d1d,#dc2626)' if is_teacher \
@@ -1724,8 +1786,14 @@ def _send_login_alert_email(user, request):
             <td style="padding:10px 0;color:#1e293b;font-size:13px;">{username_display}</td></tr>
         <tr style="background:#f8fafc;"><td style="padding:10px 8px;color:#64748b;font-size:13px;">IP Address</td>
             <td style="padding:10px 8px;color:#1e293b;font-size:13px;font-family:monospace;">{ip}</td></tr>
-        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;vertical-align:top;">User Agent</td>
-            <td style="padding:10px 0;color:#475569;font-size:12px;word-break:break-all;">{ua}</td></tr>
+        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;">Location</td>
+            <td style="padding:10px 0;color:#1e293b;font-size:13px;">{location}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:10px 8px;color:#64748b;font-size:13px;">Browser</td>
+            <td style="padding:10px 8px;color:#1e293b;font-size:13px;">{browser}</td></tr>
+        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;">Device / OS</td>
+            <td style="padding:10px 0;color:#1e293b;font-size:13px;">{device}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:10px 8px;color:#64748b;font-size:13px;vertical-align:top;">User Agent</td>
+            <td style="padding:10px 8px;color:#475569;font-size:11px;word-break:break-all;">{ua}</td></tr>
       </table>
     </td>
   </tr>
@@ -1747,6 +1815,9 @@ def _send_login_alert_email(user, request):
             f'Email: {user.email}\n'
             f'Username: {username_display}\n'
             f'IP: {ip}\n'
+            f'Location: {location}\n'
+            f'Browser: {browser}\n'
+            f'Device/OS: {device}\n'
             f'User-Agent: {ua}\n'
         )
         subject = f'[{"CRITICAL" if is_teacher else "Login"}] {user.role.title()} login — {user.name} ({user.email})'
