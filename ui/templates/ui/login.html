@@ -22,8 +22,8 @@
     <form method="post" class="stack-lg">
       {% csrf_token %}
       <label class="field">
-        <span>Email</span>
-        <input class="input" type="email" name="email" required>
+        <span>Email or Username</span>
+        <input class="input" type="text" name="email" placeholder="your@email.com or username" required autocomplete="username">
       </label>
       <label class="field">
         <span>Password</span>

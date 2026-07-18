@@ -248,7 +248,10 @@ def login_view(request):
         try:
             user = AppUser.objects.get(email=email)
         except AppUser.DoesNotExist:
-            user = None
+            try:
+                user = AppUser.objects.get(username=email.lower())
+            except AppUser.DoesNotExist:
+                user = None
 
         if user and bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8')):
             request.session[SESSION_USER_ID] = user.id
