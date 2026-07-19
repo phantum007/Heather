@@ -1489,7 +1489,8 @@ def _send_assignment_notification_email(student_name, student_email, parent_emai
     _log = logging.getLogger(__name__)
     if not student_email:
         return
-    bcc_list = [r for r in getattr(_s, 'EMAIL_BCC_RECIPIENTS', []) if r != student_email]
+    to_list = list({e for e in [student_email, parent_email or None] if e})
+    bcc_list = [r for r in getattr(_s, 'EMAIL_BCC_RECIPIENTS', []) if r not in to_list]
 
     try:
         kind_label = 'Classroom' if assignment_kind == 'classroom' else 'Homework'
@@ -1668,10 +1669,10 @@ def _send_assignment_notification_email(student_name, student_email, parent_emai
             + ''.join(f'- Lesson {l["name"]}\n' for l in lessons_data)
             + '\nBest of luck — keep practising!\nAbacusBlaze'
         )
-        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=[student_email], bcc=bcc_list)
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=to_list, bcc=bcc_list)
         msg.attach_alternative(html, 'text/html')
         msg.send(fail_silently=False)
-        _log.info('Assignment email sent for student %s to %s bcc %s', student_name, student_email, bcc_list)
+        _log.info('Assignment email sent for student %s to %s bcc %s', student_name, to_list, bcc_list)
     except Exception as _exc:
         _log.error('Assignment email failed for student %s: %s', student_name, _exc)
 
