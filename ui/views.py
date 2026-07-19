@@ -1487,11 +1487,13 @@ def _send_assignment_notification_email(student_name, student_email, parent_emai
     from django.conf import settings as _s
 
     _log = logging.getLogger(__name__)
-    base_recipients = getattr(_s, 'UNIT_REPORT_RECIPIENTS', [])
-    extra = [e for e in [student_email, parent_email] if e and e not in base_recipients]
-    recipients = base_recipients + extra
-    if not recipients:
+    bcc_list = getattr(_s, 'EMAIL_BCC_RECIPIENTS', [])
+    to_list = [parent_email] if parent_email else []
+    effective_bcc = [r for r in bcc_list if r != parent_email]
+    if not to_list and not effective_bcc:
         return
+    if not to_list:
+        to_list, effective_bcc = effective_bcc[:1], effective_bcc[1:]
 
     try:
         kind_label = 'Classroom' if assignment_kind == 'classroom' else 'Homework'
@@ -1580,17 +1582,18 @@ def _send_assignment_notification_email(student_name, student_email, parent_emai
   <!-- Star Banner -->
   <tr>
     <td style="background:linear-gradient(90deg,#fffbeb,#fff8e1,#fffbeb);padding:14px 28px;text-align:center;border-bottom:1px solid #fde68a;">
-      <p style="margin:0;font-size:18px;font-weight:bold;color:#92400e;">&#127775; You have a new assignment! &#127775;</p>
+      <p style="margin:0;font-size:18px;font-weight:bold;color:#92400e;">&#127775; New assignment for your child! &#127775;</p>
     </td>
   </tr>
 
   <!-- Greeting -->
   <tr>
     <td style="padding:28px 28px 16px;">
-      <h2 style="margin:0 0 10px;color:#0f172a;font-size:22px;">Hey {student_name}! &#128075;</h2>
+      <h2 style="margin:0 0 10px;color:#0f172a;font-size:22px;">Dear Parent,</h2>
       <p style="font-size:15px;color:#555;line-height:1.7;margin:0;">
-        Your teacher has just assigned you <strong>{total_lessons} new lesson{"s" if total_lessons != 1 else ""}</strong> on
-        <strong>AbacusBlaze</strong>. Log in, pick up where you left off, and give it your best shot!
+        Your child <strong>{student_name}</strong>'s teacher has just assigned
+        <strong>{total_lessons} new lesson{"s" if total_lessons != 1 else ""}</strong> on
+        <strong>AbacusBlaze</strong>. Please encourage them to log in and complete the work.
       </p>
     </td>
   </tr>
@@ -1626,17 +1629,17 @@ def _send_assignment_notification_email(student_name, student_email, parent_emai
     </td>
   </tr>
 
-  <!-- Best of Luck -->
+  <!-- Encouragement -->
   <tr>
     <td style="padding:0 28px 32px;">
       <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;">
         <tr>
           <td style="padding:22px 24px;text-align:center;">
             <p style="margin:0 0 8px;font-size:28px;">&#127942;</p>
-            <p style="margin:0 0 6px;font-size:18px;font-weight:bold;color:#1d4ed8;">Best of Luck!</p>
+            <p style="margin:0 0 6px;font-size:18px;font-weight:bold;color:#1d4ed8;">Keep up the great work!</p>
             <p style="margin:0;font-size:14px;color:#334155;line-height:1.6;">
-              Every practice session makes you sharper and faster.<br>
-              You&#39;ve got this — go show that abacus who&#39;s boss! &#128170;
+              Regular practice on AbacusBlaze builds speed and confidence.<br>
+              Thank you for supporting your child&#39;s learning journey! &#128170;
             </p>
           </td>
         </tr>
@@ -1662,18 +1665,18 @@ def _send_assignment_notification_email(student_name, student_email, parent_emai
 
         subject = f'AbacusBlaze — New assignment for {student_name}'
         text_body = (
-            f'Hi {student_name},\n\n'
-            f'Your teacher has assigned you {total_lessons} new lesson(s) on AbacusBlaze.\n'
+            f'Dear Parent,\n\n'
+            f'Your child {student_name}\'s teacher has assigned {total_lessons} new lesson(s) on AbacusBlaze.\n'
             f'Type: {kind_label}\n'
             + (f'Available from: {available_on}\n' if assignment_kind == 'classroom' and available_on else '')
             + '\nLessons:\n'
             + ''.join(f'- Lesson {l["name"]}\n' for l in lessons_data)
-            + '\nBest of luck — keep practising!\nAbacusBlaze'
+            + '\nThank you for supporting your child\'s learning!\nAbacusBlaze'
         )
-        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=recipients)
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=to_list, bcc=effective_bcc)
         msg.attach_alternative(html, 'text/html')
         msg.send(fail_silently=False)
-        _log.info('Assignment email sent for student %s to %s', student_name, recipients)
+        _log.info('Assignment email sent for student %s to %s bcc %s', student_name, to_list, effective_bcc)
     except Exception as _exc:
         _log.error('Assignment email failed for student %s: %s', student_name, _exc)
 
