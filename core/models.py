@@ -13,6 +13,7 @@ class AppUser(models.Model):
     email = models.EmailField(max_length=180, unique=True)
     password = models.TextField()
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    username = models.CharField(max_length=60, unique=True, null=True, blank=True)
 
     class Meta:
         db_table = 'users'
@@ -48,6 +49,21 @@ class StudentProfile(models.Model):
     class Meta:
         db_table = 'students'
         managed = False
+
+
+class StudentSpeedPrefs(models.Model):
+    user = models.OneToOneField(AppUser, on_delete=models.CASCADE, db_constraint=False, related_name='speed_prefs')
+    voice_lang = models.CharField(max_length=20, default='en-US')
+    voice_name = models.CharField(max_length=60, default='en-US-Neural2-D')
+    voice_rate = models.SmallIntegerField(default=100)
+    line_gap = models.SmallIntegerField(default=500)
+    danger_zone = models.BooleanField(default=False)
+    dz_voice_rate = models.SmallIntegerField(default=160)
+    dz_line_gap = models.SmallIntegerField(default=10)
+    must_change_password = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'student_speed_prefs'
 
 
 class LessonType(models.Model):

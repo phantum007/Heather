@@ -53,10 +53,10 @@
           <label class="speech-setting-field" for="practice-language">
             <span id="practice-language-label">Language</span>
             <select id="practice-language" class="input">
-              <option value="en">English</option>
-              <option value="hi">Hindi</option>
-              <option value="es">Spanish</option>
-              <option value="fr">French</option>
+              <option value="en-GB">English (UK)</option>
+              <option value="en-US">English (US)</option>
+              <option value="es-ES">Spanish</option>
+              <option value="fr-FR">French</option>
             </select>
           </label>
 
@@ -140,12 +140,12 @@
             <h4 class="speech-settings-title" id="practice-speed-title" hidden></h4>
             <button type="button" class="practice-close practice-speed-close" id="practice-speed-close" aria-label="Close speed settings">&times;</button>
           </div>
-          <div class="danger-zone-row">
+          <div class="danger-zone-row" id="danger-zone-row">
             <button type="button" class="danger-zone-toggle" id="danger-zone-toggle">Danger zone - OFF</button>
           </div>
 
           <div class="speed-gauge-cards">
-            <div class="speed-gauge-card">
+            <div class="speed-gauge-card" id="voice-rate-card">
               <div class="speed-gauge-card-title"><span id="practice-voice-rate-label">Select voice speed</span></div>
               <div class="speed-gauge-widget">
                 <div class="speed-gauge-scale"></div>
@@ -158,7 +158,7 @@
                   <button type="button" class="speed-gauge-dec" id="voice-rate-dec" aria-label="Decrease voice speed">-</button>
                 </div>
               </div>
-              <input id="practice-voice-rate" type="range" min="70" max="150" step="10" value="100" hidden>
+              <input id="practice-voice-rate" type="range" min="50" max="200" step="5" value="100" hidden>
             </div>
 
             <div class="speed-gauge-card">
@@ -174,7 +174,7 @@
                   <button type="button" class="speed-gauge-dec" id="line-gap-dec" aria-label="Decrease timeout speed (slower)">-</button>
                 </div>
               </div>
-              <input id="practice-line-gap" type="range" min="10" max="1200" step="10" value="630" hidden>
+              <input id="practice-line-gap" type="range" min="0" max="1200" step="5" value="630" hidden>
             </div>
           </div>
         </div>
@@ -256,6 +256,11 @@
     {% endfor %}
   {% endfor %}
   {{ unit_attempt_map|json_script:"unit-attempt-map" }}
+  {% if speed_prefs %}
+  <script id="speed-prefs-data" type="application/json">
+    {"voice_lang":"{{ speed_prefs.voice_lang|escapejs }}","voice_name":"{{ speed_prefs.voice_name|escapejs }}","voice_rate":{{ speed_prefs.voice_rate }},"line_gap":{{ speed_prefs.line_gap }},"danger_zone":{{ speed_prefs.danger_zone|yesno:"true,false" }},"dz_voice_rate":{{ speed_prefs.dz_voice_rate }},"dz_line_gap":{{ speed_prefs.dz_line_gap }}}
+  </script>
+  {% endif %}
 {% else %}
   <section class="grid">
     <article class="card">
@@ -624,22 +629,70 @@
       let questionStatuses = {};
       let activePracticeMode = 'default';
       let activeAudioMode = false;
-      let activeLanguage = window.localStorage.getItem('practiceLanguage') || 'en';
-      let activeVoiceName = window.localStorage.getItem('practiceVoiceName') || '';
-      function isFastVoice(name) {
-        const n = String(name || '').toLowerCase();
-        return n.includes('daniel') || n.includes('mark');
-      }
-      let activeVoiceRate = window.localStorage.getItem('practiceVoiceRate') ||
-        (isFastVoice(activeVoiceName) ? '130' : '100');
-      let activeLineGap = (function () {
-        const stored = Number(window.localStorage.getItem('practiceLineGap'));
-        return String(stored > 0 && stored <= 1200 ? stored : 630);
+      const GCLOUD_VOICES = {
+        'en-GB': [
+          { value: 'en-GB-Neural2-B', label: 'Oliver (Male)' },
+          { value: 'en-GB-Neural2-D', label: 'Harry (Male)' },
+          { value: 'en-GB-Neural2-A', label: 'Emma (Female)' },
+          { value: 'en-GB-Neural2-C', label: 'Sophie (Female)' },
+        ],
+        'en-US': [
+          { value: 'en-US-Neural2-D', label: 'Michael (Male)' },
+          { value: 'en-US-Neural2-A', label: 'James (Male)' },
+          { value: 'en-US-Neural2-C', label: 'Emily (Female)' },
+          { value: 'en-US-Neural2-F', label: 'Jessica (Female)' },
+        ],
+        'es-ES': [
+          { value: 'es-ES-Neural2-B', label: 'Carlos (Male)' },
+          { value: 'es-ES-Neural2-F', label: 'Alejandro (Male)' },
+          { value: 'es-ES-Neural2-A', label: 'Sofia (Female)' },
+          { value: 'es-ES-Neural2-C', label: 'Isabella (Female)' },
+        ],
+        'fr-FR': [
+          { value: 'fr-FR-Neural2-B', label: 'Lucas (Male)' },
+          { value: 'fr-FR-Neural2-D', label: 'Antoine (Male)' },
+          { value: 'fr-FR-Neural2-A', label: 'Camille (Female)' },
+          { value: 'fr-FR-Neural2-C', label: 'Sophie (Female)' },
+        ],
+      };
+
+      const LANG_TO_TRANSLATION = {
+        'en-GB': 'en', 'en-US': 'en', 'es-ES': 'es', 'fr-FR': 'fr',
+      };
+
+      (function () {
+        const el = document.getElementById('speed-prefs-data');
+        if (!el) return;
+        try {
+          const p = JSON.parse(el.textContent);
+          if (p.voice_lang) window.localStorage.setItem('practiceVoiceLang', p.voice_lang);
+          if (p.voice_name) window.localStorage.setItem('practiceVoiceName', p.voice_name);
+          window.localStorage.setItem('practiceDangerZone', String(p.danger_zone));
+          window.localStorage.setItem('practiceVoiceRate', String(p.voice_rate));
+          window.localStorage.setItem('practiceLineGap', String(p.line_gap));
+          window.localStorage.setItem('practiceDZVoiceRate', String(p.dz_voice_rate));
+          window.localStorage.setItem('practiceDZLineGap', String(p.dz_line_gap));
+        } catch (e) {}
       }());
-      let availableVoices = [];
-      if (!translations[activeLanguage]) {
-        activeLanguage = 'en';
-      }
+
+      let activeVoiceLang = window.localStorage.getItem('practiceVoiceLang') || 'en-US';
+      if (!GCLOUD_VOICES[activeVoiceLang]) activeVoiceLang = 'en-US';
+      let activeLanguage = LANG_TO_TRANSLATION[activeVoiceLang] || 'en';
+      let activeVoiceName = window.localStorage.getItem('practiceVoiceName') || 'en-US-Neural2-D';
+      let dangerZone = window.localStorage.getItem('practiceDangerZone') === 'true';
+      let activeVoiceRate = dangerZone
+        ? (window.localStorage.getItem('practiceDZVoiceRate') || '160')
+        : (window.localStorage.getItem('practiceVoiceRate') || '100');
+      let activeLineGap = (function () {
+        if (dangerZone) {
+          return window.localStorage.getItem('practiceDZLineGap') || '10';
+        }
+        const stored = Number(window.localStorage.getItem('practiceLineGap'));
+        return String(stored >= 40 && stored <= 1200 ? stored : 500);
+      }());
+      let ttsAudio = null;
+      const ttsCache = {};
+      const ttsPending = {};
       const selectedAssignmentId = "{{ selected_assignment.id|default:'' }}";
       const unitAttemptMap = JSON.parse(document.getElementById('unit-attempt-map').textContent || '{}');
       const assignmentMode = '{{ selected_assignment.mode|default:"sprint" }}';
@@ -685,21 +738,58 @@
       }
 
       function formatVoiceRateValue(value) {
-        return `${Math.round(Number(value || 100))}%`;
+        return `${(Number(value || 100) / 100).toFixed(1)}×`;
       }
 
       function formatLineGapValue(value) {
         return `${(Number(value || 1600) / 1000).toFixed(2)}s`;
       }
 
-      let dangerZone = window.localStorage.getItem('practiceDangerZone') === 'true';
+      let _savePrefsTimer = null;
+      let _prefsDirty = false;
+
+      function _prefsPayload() {
+        return JSON.stringify({
+          voice_lang: window.localStorage.getItem('practiceVoiceLang') || 'en-US',
+          voice_name: window.localStorage.getItem('practiceVoiceName') || 'en-US-Neural2-D',
+          voice_rate: Number(window.localStorage.getItem('practiceVoiceRate') || 100),
+          line_gap: Number(window.localStorage.getItem('practiceLineGap') || 500),
+          danger_zone: window.localStorage.getItem('practiceDangerZone') === 'true',
+          dz_voice_rate: Number(window.localStorage.getItem('practiceDZVoiceRate') || 160),
+          dz_line_gap: Number(window.localStorage.getItem('practiceDZLineGap') || 10),
+        });
+      }
+
+      function savePrefsToServer() {
+        _prefsDirty = true;
+        clearTimeout(_savePrefsTimer);
+        _savePrefsTimer = setTimeout(function () {
+          _prefsDirty = false;
+          fetch('{% url "ui-student-speed-prefs" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: _prefsPayload(),
+          }).catch(function () {});
+        }, 800);
+      }
+
+      window.addEventListener('beforeunload', function () {
+        if (!_prefsDirty) return;
+        clearTimeout(_savePrefsTimer);
+        fetch('{% url "ui-student-speed-prefs" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+          body: _prefsPayload(),
+          keepalive: true,
+        }).catch(function () {});
+      });
 
       function getVoiceRateLimits() {
-        return { min: 70, max: dangerZone ? 200 : 150, step: 10 };
+        return dangerZone ? { min: 160, max: 200, step: 5 } : { min: 50, max: 150, step: 5 };
       }
 
       function getLineGapLimits() {
-        return { min: 10, max: 1200, step: 10 };
+        return dangerZone ? { min: 10, max: 30, step: 5 } : { min: 40, max: 1200, step: 10 };
       }
 
       function syncGauges() {
@@ -711,7 +801,8 @@
         voiceRateDec.disabled = rVal <= rLimits.min;
 
         const gLimits = getLineGapLimits();
-        const gVal = Math.min(gLimits.max, Math.max(gLimits.min, Number(activeLineGap) || 630));
+        const gNum = parseFloat(activeLineGap);
+        const gVal = Math.min(gLimits.max, Math.max(gLimits.min, isNaN(gNum) ? 630 : gNum));
         const gPct = ((gLimits.max - gVal) / (gLimits.max - gLimits.min)) * 100;
         lineGapFill.style.height = `${gPct}%`;
         lineGapInc.disabled = gVal <= gLimits.min;
@@ -723,74 +814,15 @@
         }
       }
 
-      function getLanguagePrefix() {
-        const locale = getLocaleConfig();
-        return String(locale.voiceLang || translations.en.voiceLang).split('-')[0].toLowerCase();
-      }
-
-      const NOVELTY_VOICES = new Set([
-        'albert', 'bad news', 'bahh', 'bells', 'boing', 'bubbles', 'cellos',
-        'deranged', 'fred', 'good news', 'hysterical', 'junior', 'kathy',
-        'organ', 'pipe organ', 'princess', 'ralph', 'trinoids', 'whisper',
-        'wobble', 'xander', 'zarvox', 'jester', 'laughing', 'creaky',
-        'superstar', 'crazy', 'boing', 'noise', 'bonkers',
-      ]);
-
-      function isProfessionalVoice(voice) {
-        const nameLower = String(voice.name || '').toLowerCase();
-        return !NOVELTY_VOICES.has(nameLower) && !nameLower.startsWith('com.');
-      }
-
       function refreshVoiceOptions() {
-        const defaultLabel = t('defaultVoice');
-        const currentPrefix = getLanguagePrefix();
-        const matchingVoices = availableVoices.filter((voice) =>
-          String(voice.lang || '').toLowerCase().startsWith(currentPrefix) &&
-          isProfessionalVoice(voice)
-        );
-        const selectedValue = activeVoiceName;
-        voiceSelect.innerHTML = '';
-
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = defaultLabel;
-        voiceSelect.appendChild(defaultOption);
-
-        const byRegion = {};
-        matchingVoices.forEach((voice) => {
-          const key = String(voice.lang || '').toLowerCase();
-          if (!byRegion[key]) byRegion[key] = [];
-          byRegion[key].push(voice);
-        });
-
-        Object.keys(byRegion).sort().forEach((regionKey) => {
-          const group = document.createElement('optgroup');
-          group.label = regionKey.toUpperCase();
-          byRegion[regionKey]
-            .sort((a, b) => String(a.name).localeCompare(String(b.name)))
-            .forEach((voice) => {
-              const option = document.createElement('option');
-              option.value = voice.name;
-              option.textContent = voice.name;
-              group.appendChild(option);
-            });
-          voiceSelect.appendChild(group);
-        });
-
-        const hasSelectedVoice = matchingVoices.some((voice) => voice.name === selectedValue);
-        voiceSelect.value = hasSelectedVoice ? selectedValue : '';
-        if (!hasSelectedVoice) {
-          activeVoiceName = '';
-          window.localStorage.removeItem('practiceVoiceName');
-        }
-      }
-
-      function loadVoices() {
-        if (!('speechSynthesis' in window)) {
-          return;
-        }
-        availableVoices = window.speechSynthesis.getVoices() || [];
-        refreshVoiceOptions();
+        const voices = GCLOUD_VOICES[activeVoiceLang] || [];
+        voiceSelect.innerHTML = voices.map(function (v) {
+          return `<option value="${v.value}">${v.label}</option>`;
+        }).join('');
+        const exists = voices.some(function (v) { return v.value === activeVoiceName; });
+        voiceSelect.value = exists ? activeVoiceName : (voices[0] ? voices[0].value : '');
+        activeVoiceName = voiceSelect.value;
+        if (activeVoiceName) window.localStorage.setItem('practiceVoiceName', activeVoiceName);
       }
 
       function updateTrackSelectionLabels() {
@@ -814,7 +846,7 @@
       }
 
       function applyLanguage() {
-        languageSelect.value = activeLanguage;
+        languageSelect.value = activeVoiceLang;
         speechSettingsEyebrow.textContent = t('speechSettingsEyebrow');
         speechSettingsTitle.textContent = t('speechSettingsTitle');
         previewVoiceButton.textContent = t('previewVoice');
@@ -916,8 +948,10 @@
         window.clearTimeout(speechStartTimer);
         speechStartTimer = null;
         speechSequenceToken += 1;
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
+        if (ttsAudio) {
+          ttsAudio.pause();
+          ttsAudio.src = '';
+          ttsAudio = null;
         }
       }
 
@@ -929,91 +963,100 @@
         }
       }
 
-      function speakQuestion(questionText) {
-        if (!activeAudioMode || !('speechSynthesis' in window) || !questionText) {
-          return;
-        }
-        stopSpeech();
-        const currentSpeechToken = speechSequenceToken;
-        const locale = getLocaleConfig();
-        const digitWords = locale.digitWords || translations.en.digitWords;
-        const operators = locale.operators || translations.en.operators;
+      function _numToWords(n) {
+        var ones = ['zero','one','two','three','four','five','six','seven','eight','nine',
+                    'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+        var tens = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+        if (n < 0) return 'negative ' + _numToWords(-n);
+        if (n < 20) return ones[n];
+        if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '');
+        if (n < 1000) return ones[Math.floor(n / 100)] + ' hundred' + (n % 100 ? ' ' + _numToWords(n % 100) : '');
+        if (n < 1000000) return _numToWords(Math.floor(n / 1000)) + ' thousand' + (n % 1000 ? ' ' + _numToWords(n % 1000) : '');
+        if (n < 1000000000) return _numToWords(Math.floor(n / 1000000)) + ' million' + (n % 1000000 ? ' ' + _numToWords(n % 1000000) : '');
+        return _numToWords(Math.floor(n / 1000000000)) + ' billion' + (n % 1000000000 ? ' ' + _numToWords(n % 1000000000) : '');
+      }
 
-        function digitsToWords(str) {
-          return String(str)
-            .replace(/\d+/g, (digits) => digits.split('').map((d) => digitWords[d] || d).join(' '))
-            .replace(/\s{2,}/g, ' ')
-            .trim();
-        }
+      function _expandNums(text) {
+        if (activeVoiceLang !== 'en-GB' && activeVoiceLang !== 'en-US') return String(text);
+        return String(text).replace(/\d+/g, function (m) { return _numToWords(parseInt(m, 10)); });
+      }
 
-        function lineToSpoken(line, index) {
-          const raw = line.trim();
-          if (index === 0) return digitsToWords(raw);
-          if (/^[+]/.test(raw)) return `${operators.plus || 'plus'} ${digitsToWords(raw.slice(1).trim())}`;
-          if (/^[-]/.test(raw)) return `${operators.minus} ${digitsToWords(raw.slice(1).trim())}`;
-          if (/^[×x*]/.test(raw)) return `${operators.times} ${digitsToWords(raw.slice(1).trim())}`;
-          if (/^[÷/]/.test(raw)) return `${operators.divide} ${digitsToWords(raw.slice(1).trim())}`;
-          return digitsToWords(raw);
-        }
-
-        const rawSpokenLines = String(questionText).split(/\n+/).map((p) => p.trim()).filter(Boolean);
-        // Build spoken token list: whole numbers as a single token (TTS reads place values), decimal digits individually
+      function buildSpokenLines(questionText) {
+        const operators = (getLocaleConfig().operators) || translations.en.operators;
+        const rawLines = String(questionText).split(/\n+/).map(function (l) { return l.trim(); }).filter(Boolean);
         const spokenLines = [];
-        rawSpokenLines.forEach((line, idx) => {
-          const raw = line.trim();
-          let digits = raw;
-          if (idx > 0) {
-            let opWord = null;
-            if (/^[+]/.test(raw)) { opWord = operators.plus || 'plus'; digits = raw.slice(1).trim(); }
-            else if (/^[-]/.test(raw)) { opWord = operators.minus; digits = raw.slice(1).trim(); }
-            else if (/^[×x*]/.test(raw)) { opWord = operators.times; digits = raw.slice(1).trim(); }
-            else if (/^[÷/]/.test(raw)) { opWord = operators.divide; digits = raw.slice(1).trim(); }
-            else { opWord = operators.plus || 'plus'; } // implicit addition
-            if (opWord) spokenLines.push(opWord);
-          }
-          const numStr = digits.replace(/[^\d.]/g, '');
-          if (numStr) {
-            const dotIdx = numStr.indexOf('.');
-            if (dotIdx === -1) {
-              spokenLines.push(numStr);
+        rawLines.forEach(function (line, idx) {
+          if (idx === 0) {
+            spokenLines.push(_expandNums(line));
+          } else if (/^[+]/.test(line)) {
+            spokenLines.push((operators.plus || 'plus') + ' ' + _expandNums(line.slice(1).trim()));
+          } else if (/^[-]/.test(line)) {
+            spokenLines.push((operators.minus || 'minus') + ' ' + _expandNums(line.slice(1).trim()));
+          } else if (/^[×x*]/.test(line)) {
+            spokenLines.push((operators.times || 'times') + ' ' + _expandNums(line.slice(1).trim()));
+          } else if (/^[÷/]/.test(line)) {
+            spokenLines.push((operators.divide || 'divided by') + ' ' + _expandNums(line.slice(1).trim()));
+          } else if (/^\d/.test(line)) {
+            if (activePracticeMode === 'multiplication') {
+              spokenLines.push((operators.times || 'times') + ' ' + _expandNums(line));
+            } else if (activePracticeMode === 'division') {
+              spokenLines.push((operators.divide || 'divided by') + ' ' + _expandNums(line));
+            } else if (activePracticeMode === 'listening') {
+              spokenLines.push((operators.plus || 'plus') + ' ' + _expandNums(line));
             } else {
-              const wholePart = numStr.slice(0, dotIdx);
-              const decPart = numStr.slice(dotIdx + 1);
-              if (wholePart) spokenLines.push(wholePart);
-              spokenLines.push(operators.point || 'point');
-              decPart.split('').forEach((d) => { if (/\d/.test(d)) spokenLines.push(digitWords[d] || d); });
+              spokenLines.push(_expandNums(line));
             }
+          } else {
+            spokenLines.push(_expandNums(line));
           }
         });
         if (spokenLines.length) spokenLines.push(operators.equals || 'equals');
+        return spokenLines;
+      }
 
-        const speakLine = function (index) {
-          if (currentSpeechToken !== speechSequenceToken || index >= spokenLines.length) {
-            return;
-          }
-          const utterance = new SpeechSynthesisUtterance(spokenLines[index]);
-          utterance.lang = locale.voiceLang || translations.en.voiceLang;
-          const selectedVoice = availableVoices.find((voice) => voice.name === activeVoiceName);
-          if (selectedVoice) {
-            utterance.voice = selectedVoice;
-          }
-          utterance.rate = Math.max(0.1, (Number(activeVoiceRate) || 100) / 100);
-          utterance.pitch = 1;
-          utterance.onend = function () {
-            if (currentSpeechToken !== speechSequenceToken || index >= spokenLines.length - 1) {
-              return;
-            }
-            window.setTimeout(function () {
-              speakLine(index + 1);
-            }, Number(activeLineGap) || 630);
-          };
-          window.speechSynthesis.speak(utterance);
-        };
+      function fetchTTSAudio(spokenLines) {
+        const key = activeVoiceName + '|' + activeVoiceRate + '|' + activeLineGap + '|' + spokenLines.join('\n');
+        if (ttsCache[key]) return Promise.resolve(ttsCache[key]);
+        if (ttsPending[key]) return ttsPending[key];
+        const p = fetch('/tts/synthesize/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+          body: JSON.stringify({
+            text: spokenLines.join('\n'),
+            voice: activeVoiceName,
+            rate: (Number(activeVoiceRate) || 100) / 100,
+            line_gap_ms: Number(activeLineGap) || 630,
+          }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            delete ttsPending[key];
+            if (data.audio) { ttsCache[key] = data.audio; return data.audio; }
+            return null;
+          })
+          .catch(function () { delete ttsPending[key]; return null; });
+        ttsPending[key] = p;
+        return p;
+      }
+
+      function prefetchTTS(questionText) {
+        if (!activeAudioMode || !questionText) return;
+        fetchTTSAudio(buildSpokenLines(questionText));
+      }
+
+      function speakQuestion(questionText) {
+        if (!activeAudioMode || !questionText) return;
+        stopSpeech();
+        const currentSpeechToken = speechSequenceToken;
+        const spokenLines = buildSpokenLines(questionText);
 
         speechStartTimer = window.setTimeout(function () {
-          if (currentSpeechToken === speechSequenceToken) {
-            speakLine(0);
-          }
+          if (currentSpeechToken !== speechSequenceToken) return;
+          fetchTTSAudio(spokenLines).then(function (audioData) {
+            if (!audioData || currentSpeechToken !== speechSequenceToken) return;
+            ttsAudio = new Audio(audioData);
+            ttsAudio.play().catch(function () {});
+          });
         }, 400);
       }
 
@@ -1255,14 +1298,15 @@
             }
             flashTarget.textContent = sequence[flashIndex] || '';
             flashIndex += 1;
+            const flashMs = Math.max(50, Number(activeLineGap) || 500);
             if (flashIndex < sequence.length) {
-              flashTimeoutId = window.setTimeout(runFlashStep, 3000);
+              flashTimeoutId = window.setTimeout(runFlashStep, flashMs);
             } else {
               flashTimeoutId = window.setTimeout(function () {
                 if (currentToken === flashSequenceToken && flashTarget) {
                   flashTarget.textContent = '';
                 }
-              }, 3000);
+              }, flashMs);
             }
           };
           runFlashStep();
@@ -1278,6 +1322,7 @@
             stageQuestion.textContent = question.question_text;
           }
         }
+        prefetchTTS(question.question_text);
         speakQuestion(question.question_text);
         const isLocked = Boolean(questionStatuses[String(question.id)]);
         answerInput.disabled = isLocked;
@@ -1302,13 +1347,22 @@
       }
 
       function openSpeedPanel() {
+        updateSpeedPanelForMode();
         speedPanel.removeAttribute('hidden');
         speedToggleButton.classList.add('is-open');
       }
 
+      function updateSpeedPanelForMode() {
+        const isFlash = activePracticeMode === 'flash';
+        const voiceRateCard = document.getElementById('voice-rate-card');
+        if (voiceRateCard) voiceRateCard.style.display = isFlash ? 'none' : '';
+      }
+
       languageSelect.addEventListener('change', function () {
-        activeLanguage = translations[languageSelect.value] ? languageSelect.value : 'en';
-        window.localStorage.setItem('practiceLanguage', activeLanguage);
+        activeVoiceLang = GCLOUD_VOICES[languageSelect.value] ? languageSelect.value : 'en-US';
+        activeLanguage = LANG_TO_TRANSLATION[activeVoiceLang] || 'en';
+        window.localStorage.setItem('practiceVoiceLang', activeVoiceLang);
+        savePrefsToServer();
         applyLanguage();
         renderQuestionNav();
         if (summary.classList.contains('is-visible')) {
@@ -1329,12 +1383,10 @@
         activeVoiceName = voiceSelect.value || '';
         if (activeVoiceName) {
           window.localStorage.setItem('practiceVoiceName', activeVoiceName);
-          if (isFastVoice(activeVoiceName) && !window.localStorage.getItem('practiceVoiceRate')) {
-            setVoiceRate(130);
-          }
         } else {
           window.localStorage.removeItem('practiceVoiceName');
         }
+        savePrefsToServer();
       });
 
       function setVoiceRate(newVal) {
@@ -1343,7 +1395,8 @@
         activeVoiceRate = clamped;
         voiceRateSelect.value = clamped;
         voiceRateValue.textContent = formatVoiceRateValue(clamped);
-        window.localStorage.setItem('practiceVoiceRate', clamped);
+        window.localStorage.setItem(dangerZone ? 'practiceDZVoiceRate' : 'practiceVoiceRate', clamped);
+        savePrefsToServer();
         syncGauges();
         if (modal.classList.contains('is-open')) {
           renderQuestion();
@@ -1356,7 +1409,8 @@
         activeLineGap = clamped;
         lineGapSelect.value = clamped;
         lineGapValue.textContent = formatLineGapValue(clamped);
-        window.localStorage.setItem('practiceLineGap', clamped);
+        window.localStorage.setItem(dangerZone ? 'practiceDZLineGap' : 'practiceLineGap', clamped);
+        savePrefsToServer();
         syncGauges();
         if (modal.classList.contains('is-open')) {
           renderQuestion();
@@ -1400,7 +1454,23 @@
       dangerZoneToggle.addEventListener('click', function () {
         dangerZone = !dangerZone;
         window.localStorage.setItem('practiceDangerZone', String(dangerZone));
+        if (dangerZone) {
+          activeVoiceRate = window.localStorage.getItem('practiceDZVoiceRate') || '160';
+          activeLineGap = window.localStorage.getItem('practiceDZLineGap') || '10';
+        } else {
+          activeVoiceRate = window.localStorage.getItem('practiceVoiceRate') || '100';
+          const storedGap = Number(window.localStorage.getItem('practiceLineGap'));
+          activeLineGap = String(storedGap >= 40 && storedGap <= 1200 ? storedGap : 500);
+        }
+        voiceRateSelect.value = activeVoiceRate;
+        voiceRateValue.textContent = formatVoiceRateValue(activeVoiceRate);
+        lineGapSelect.value = activeLineGap;
+        lineGapValue.textContent = formatLineGapValue(activeLineGap);
+        savePrefsToServer();
         syncGauges();
+        if (modal.classList.contains('is-open')) {
+          renderQuestion();
+        }
       });
 
       function trackClickToValue(trackEl, e, min, max, step, invert) {
@@ -1424,17 +1494,25 @@
       });
 
       previewVoiceButton.addEventListener('click', function () {
-        const locale = getLocaleConfig();
         stopSpeech();
-        const utterance = new SpeechSynthesisUtterance(t('previewSample'));
-        utterance.lang = locale.voiceLang || translations.en.voiceLang;
-        const selectedVoice = availableVoices.find((voice) => voice.name === activeVoiceName);
-        if (selectedVoice) {
-          utterance.voice = selectedVoice;
-        }
-        utterance.rate = Math.max(0.1, (Number(activeVoiceRate) || 100) / 100);
-        utterance.pitch = 1;
-        window.speechSynthesis.speak(utterance);
+        const currentToken = speechSequenceToken;
+        fetch('/tts/synthesize/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+          body: JSON.stringify({
+            text: t('previewSample'),
+            voice: activeVoiceName,
+            rate: (Number(activeVoiceRate) || 100) / 100,
+            line_gap_ms: 0,
+          }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (currentToken !== speechSequenceToken || !data.audio) return;
+            ttsAudio = new Audio(data.audio);
+            ttsAudio.play().catch(function () {});
+          })
+          .catch(function () {});
       });
 
       speedToggleButton.addEventListener('click', function () {
@@ -1557,6 +1635,7 @@
         questionStatuses = isNewAttempt ? {} : (savedState.statuses || {});
         activePracticeMode = practiceMode || 'default';
         activeAudioMode = Boolean(audioMode);
+        updateSpeedPanelForMode();
         updateAnswerIcon();
         updateUnitCompletionStates();
         const nextUnattemptedIndex = activeQuestions.findIndex((item) => !questionStatuses[String(item.id)]);
@@ -1776,27 +1855,7 @@
           });
       });
 
-      if ('speechSynthesis' in window) {
-        loadVoices();
-        if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
-          window.speechSynthesis.onvoiceschanged = loadVoices;
-        }
-        // Brave blocks getVoices() initially — poll until voices arrive (up to 3s)
-        if (!availableVoices.length) {
-          let voicePollAttempts = 0;
-          const voicePollId = window.setInterval(function () {
-            voicePollAttempts += 1;
-            const voices = window.speechSynthesis.getVoices() || [];
-            if (voices.length || voicePollAttempts >= 6) {
-              window.clearInterval(voicePollId);
-              if (voices.length) {
-                availableVoices = voices;
-                refreshVoiceOptions();
-              }
-            }
-          }, 500);
-        }
-      }
+      refreshVoiceOptions();
       applyLanguage();
       updateUnitCompletionStates();
     })();

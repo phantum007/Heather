@@ -1,4 +1,5 @@
 import bcrypt
+import json
 import os
 import re
 from uuid import uuid4
@@ -29,6 +30,7 @@ from core.models import (
     Question,
     StudentAnswer,
     StudentProfile,
+    StudentSpeedPrefs,
     SubLesson,
     SubLessonTypeMaster,
     Toy,
@@ -246,13 +248,21 @@ def login_view(request):
         try:
             user = AppUser.objects.get(email=email)
         except AppUser.DoesNotExist:
-            user = None
+            try:
+                user = AppUser.objects.get(username=email.lower())
+            except AppUser.DoesNotExist:
+                user = None
 
         if user and bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8')):
             request.session[SESSION_USER_ID] = user.id
+            import threading as _lt
+            _lt.Thread(target=_send_login_alert_email, args=(user, request), daemon=True).start()
             if user.role == 'teacher':
                 return redirect('ui-teacher-dashboard')
             if user.role == 'student':
+                prefs = StudentSpeedPrefs.objects.filter(user_id=user.id).first()
+                if prefs and prefs.must_change_password:
+                    return redirect('ui-student-force-change-password')
                 return redirect('ui-student-assignments')
         else:
             messages.error(request, 'Invalid credentials')
@@ -410,12 +420,14 @@ def teacher_students(request):
         return response
 
     students = StudentProfile.objects.select_related('user', 'grade').order_by('user__name')
+    new_student_set_pw = request.session.pop('new_student_set_pw', None)
     return render(
         request,
         'ui/teacher_students.html',
         {
             'current_user': user,
             'students': students,
+            'new_student_set_pw': new_student_set_pw,
         },
     )
 
@@ -563,7 +575,25 @@ def teacher_add_student(request):
                     'Student could not be created because the database is out of sync. Please redeploy and run migrations, then try again.',
                 )
             else:
+                StudentSpeedPrefs.objects.update_or_create(
+                    user_id=created_user.id,
+                    defaults={'must_change_password': True},
+                )
+                from django.core import signing as _signing
+                _token = _signing.dumps({'uid': created_user.id}, salt='welcome-set-password')
+                _set_pw_url = request.build_absolute_uri(f'/student/set-password/{_token}/')
+                import threading as _t2
+                _t2.Thread(
+                    target=_send_welcome_email,
+                    args=(f'{first_name} {last_name}'.strip(), email, _set_pw_url),
+                    daemon=True,
+                ).start()
                 messages.success(request, 'Student onboarded successfully.')
+                request.session['new_student_set_pw'] = {
+                    'name': f'{first_name} {last_name}'.strip(),
+                    'email': email,
+                    'url': _set_pw_url,
+                }
                 return redirect('ui-teacher-students')
 
     return render(
@@ -819,6 +849,34 @@ def teacher_create_assignment(request):
                         )
                     )
                 Assignment.objects.bulk_create(assignments_to_create)
+                if assignments_to_create and selected_student:
+                    import threading as _t
+                    assigned_lesson_ids = set(selected_lesson_ids_int)
+                    lessons_data = []
+                    for lesson in lessons:
+                        if lesson.id not in assigned_lesson_ids:
+                            continue
+                        sub_lessons = [
+                            {'name': sl.sub_lesson_name, 'unit_count': sl.units.count()}
+                            for sl in lesson.sub_lessons.all()
+                        ]
+                        lessons_data.append({'name': lesson.lesson_name, 'sub_lessons': sub_lessons})
+                    _s_name = (
+                        f'{selected_student.first_name or ""} {selected_student.last_name or ""}'.strip()
+                        or selected_student.user.name
+                    )
+                    _t.Thread(
+                        target=_send_assignment_notification_email,
+                        args=(
+                            _s_name,
+                            selected_student.user.email,
+                            selected_student.parent_email or '',
+                            lessons_data,
+                            assignment_kind,
+                            available_on,
+                        ),
+                        daemon=True,
+                    ).start()
             if removed_previous_grade_count and replaced_count:
                 messages.success(
                     request,
@@ -1405,6 +1463,7 @@ def student_assignments(request):
         lesson_tracks = _build_student_lesson_tracks(selected_assignment.lesson)
         unit_attempt_map = _serialize_unit_attempts(user.id, selected_assignment.id, lesson_tracks)
 
+    speed_prefs, _ = StudentSpeedPrefs.objects.get_or_create(user_id=user.id)
     return render(
         request,
         'ui/student_assignments.html',
@@ -1417,8 +1476,790 @@ def student_assignments(request):
             'selected_assignment': selected_assignment,
             'lesson_tracks': lesson_tracks,
             'unit_attempt_map': unit_attempt_map,
+            'speed_prefs': speed_prefs,
         },
     )
+
+
+def _send_assignment_notification_email(student_name, student_email, parent_email, lessons_data, assignment_kind, available_on):
+    import logging
+    from django.core.mail import EmailMultiAlternatives
+    from django.conf import settings as _s
+
+    _log = logging.getLogger(__name__)
+    if not student_email:
+        return
+    to_list = list({e for e in [student_email, parent_email or None] if e})
+    bcc_list = [r for r in getattr(_s, 'EMAIL_BCC_RECIPIENTS', []) if r not in to_list]
+
+    try:
+        kind_label = 'Classroom' if assignment_kind == 'classroom' else 'Homework'
+        total_lessons = len(lessons_data)
+
+        lesson_rows = ''
+        for idx, lesson in enumerate(lessons_data):
+            row_bg = '#ffffff' if idx % 2 == 0 else '#f7f9fc'
+            sub_lines = ''.join(
+                f'<div style="font-size:12px;color:#64748b;margin-top:3px;">&#8226; {sl["name"]} — {sl["unit_count"]} unit{"s" if sl["unit_count"] != 1 else ""}</div>'
+                for sl in lesson['sub_lessons']
+            )
+            lesson_rows += (
+                f'<tr style="background:{row_bg};">'
+                f'<td style="padding:12px 16px;font-weight:bold;color:#0f172a;border-bottom:1px solid #e2e8f0;">'
+                f'Lesson {lesson["name"]}'
+                f'{sub_lines}'
+                f'</td>'
+                f'<td style="padding:12px 16px;text-align:center;color:#1565c0;font-weight:bold;font-size:20px;border-bottom:1px solid #e2e8f0;">'
+                f'{sum(sl["unit_count"] for sl in lesson["sub_lessons"])}'
+                f'</td>'
+                f'</tr>'
+            )
+
+        available_row = ''
+        if assignment_kind == 'classroom' and available_on:
+            available_row = f'<tr><td style="padding:10px 14px;color:#666;border-bottom:1px solid #eee;">Available From</td><td style="padding:10px 14px;color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{available_on}</td></tr>'
+
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>New Assignment</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:30px 0;">
+<tr><td align="center">
+
+<table width="680" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 5px 20px rgba(0,0,0,.1);">
+
+  <!-- Header -->
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A 0%,#0F766E 55%,#F97316 100%);padding:20px 28px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="left" valign="middle">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td valign="middle" style="padding-right:12px;">
+                  <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" width="48" height="48" style="display:block;">
+                    <rect width="256" height="256" rx="56" fill="url(#asnBg)"/>
+                    <rect x="46" y="40" width="164" height="176" rx="28" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.46)" stroke-width="8"/>
+                    <rect x="80" y="76" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <rect x="80" y="118" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <rect x="80" y="160" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <circle cx="102" cy="81" r="15" fill="#F97316"/>
+                    <circle cx="154" cy="81" r="15" fill="#38BDF8"/>
+                    <circle cx="128" cy="123" r="15" fill="#FB7185"/>
+                    <circle cx="102" cy="165" r="15" fill="#38BDF8"/>
+                    <circle cx="154" cy="165" r="15" fill="#F97316"/>
+                    <path d="M96 198L128 58L160 198" stroke="rgba(255,255,255,0.92)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M108 146H148" stroke="rgba(255,255,255,0.92)" stroke-width="10" stroke-linecap="round"/>
+                    <defs>
+                      <linearGradient id="asnBg" x1="30" y1="22" x2="220" y2="230" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#0F172A"/>
+                        <stop offset="0.55" stop-color="#0F766E"/>
+                        <stop offset="1" stop-color="#F97316"/>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                </td>
+                <td valign="middle" style="color:white;font-size:22px;font-weight:bold;letter-spacing:1px;">AbacusBlaze</td>
+              </tr>
+            </table>
+          </td>
+          <td align="right" style="color:rgba(255,255,255,0.9);font-size:15px;font-weight:bold;">
+            NEW ASSIGNMENT
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Star Banner -->
+  <tr>
+    <td style="background:linear-gradient(90deg,#fffbeb,#fff8e1,#fffbeb);padding:14px 28px;text-align:center;border-bottom:1px solid #fde68a;">
+      <p style="margin:0;font-size:18px;font-weight:bold;color:#92400e;">&#127775; You have a new assignment! &#127775;</p>
+    </td>
+  </tr>
+
+  <!-- Greeting -->
+  <tr>
+    <td style="padding:28px 28px 16px;">
+      <h2 style="margin:0 0 10px;color:#0f172a;font-size:22px;">Hey {student_name}! &#128075;</h2>
+      <p style="font-size:15px;color:#555;line-height:1.7;margin:0;">
+        Your teacher has just assigned you <strong>{total_lessons} new lesson{"s" if total_lessons != 1 else ""}</strong> on
+        <strong>AbacusBlaze</strong>. Log in, pick up where you left off, and give it your best shot!
+      </p>
+    </td>
+  </tr>
+
+  <!-- Assignment Summary -->
+  <tr>
+    <td style="padding:0 28px 24px;">
+      <table width="100%" cellpadding="10" cellspacing="0" style="border-collapse:collapse;font-size:14px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+        <tr style="background:#f7f9fc;">
+          <td style="color:#666;border-bottom:1px solid #eee;">Assignment Type</td>
+          <td style="color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{kind_label}</td>
+        </tr>
+        {available_row}
+        <tr>
+          <td style="color:#666;">Total Lessons</td>
+          <td style="color:#1565c0;font-weight:bold;text-align:right;font-size:18px;">{total_lessons}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Lessons Breakdown -->
+  <tr>
+    <td style="padding:0 28px 28px;">
+      <h3 style="color:#333;margin:0 0 12px;font-size:15px;">&#128218; Assigned Lessons</h3>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
+        <tr style="background:#0F766E;color:white;">
+          <th align="left" style="padding:10px 16px;font-weight:600;">Lesson</th>
+          <th align="center" style="padding:10px 16px;font-weight:600;">Units</th>
+        </tr>
+        {lesson_rows}
+      </table>
+    </td>
+  </tr>
+
+  <!-- Best of Luck -->
+  <tr>
+    <td style="padding:0 28px 32px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;">
+        <tr>
+          <td style="padding:22px 24px;text-align:center;">
+            <p style="margin:0 0 8px;font-size:28px;">&#127942;</p>
+            <p style="margin:0 0 6px;font-size:18px;font-weight:bold;color:#1d4ed8;">Best of Luck!</p>
+            <p style="margin:0;font-size:14px;color:#334155;line-height:1.6;">
+              Every practice session makes you sharper and faster.<br>
+              You&#39;ve got this — go show that abacus who&#39;s boss! &#128170;
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A 0%,#0F766E 55%,#F97316 100%);color:white;padding:20px 28px;text-align:center;">
+      <h3 style="margin:0 0 6px;">AbacusBlaze</h3>
+      <p style="margin:0;font-size:12px;opacity:.8;">This is an automated notification. Please do not reply to this email.</p>
+    </td>
+  </tr>
+
+</table>
+
+</td></tr>
+</table>
+
+</body>
+</html>"""
+
+        subject = f'AbacusBlaze — New assignment for {student_name}'
+        text_body = (
+            f'Hi {student_name},\n\n'
+            f'Your teacher has assigned you {total_lessons} new lesson(s) on AbacusBlaze.\n'
+            f'Type: {kind_label}\n'
+            + (f'Available from: {available_on}\n' if assignment_kind == 'classroom' and available_on else '')
+            + '\nLessons:\n'
+            + ''.join(f'- Lesson {l["name"]}\n' for l in lessons_data)
+            + '\nBest of luck — keep practising!\nAbacusBlaze'
+        )
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=to_list, bcc=bcc_list)
+        msg.attach_alternative(html, 'text/html')
+        msg.send(fail_silently=False)
+        _log.info('Assignment email sent for student %s to %s bcc %s', student_name, to_list, bcc_list)
+    except Exception as _exc:
+        _log.error('Assignment email failed for student %s: %s', student_name, _exc)
+
+
+def _parse_user_agent(ua_string):
+    """Return (browser, device_type) from a User-Agent string."""
+    ua = ua_string or ''
+    # Browser
+    if 'Edg/' in ua or 'Edge/' in ua:
+        browser = 'Microsoft Edge'
+    elif 'OPR/' in ua or 'Opera/' in ua:
+        browser = 'Opera'
+    elif 'SamsungBrowser/' in ua:
+        browser = 'Samsung Browser'
+    elif 'Chrome/' in ua and 'Chromium' not in ua:
+        browser = 'Google Chrome'
+    elif 'Firefox/' in ua:
+        browser = 'Mozilla Firefox'
+    elif 'Safari/' in ua and 'Chrome' not in ua:
+        browser = 'Apple Safari'
+    elif 'MSIE' in ua or 'Trident/' in ua:
+        browser = 'Internet Explorer'
+    else:
+        browser = 'Unknown Browser'
+    # Device / OS
+    if 'iPhone' in ua:
+        device = 'iPhone (iOS)'
+    elif 'iPad' in ua:
+        device = 'iPad (iOS)'
+    elif 'Android' in ua and 'Mobile' in ua:
+        device = 'Android Phone'
+    elif 'Android' in ua:
+        device = 'Android Tablet'
+    elif 'Windows NT' in ua:
+        device = 'Windows PC'
+    elif 'Macintosh' in ua or 'Mac OS X' in ua:
+        device = 'Mac'
+    elif 'Linux' in ua:
+        device = 'Linux'
+    elif 'CrOS' in ua:
+        device = 'Chromebook'
+    else:
+        device = 'Unknown Device'
+    return browser, device
+
+
+def _geo_lookup(ip):
+    """Return (city, region, country) via ip-api.com (free, no key needed)."""
+    import urllib.request as _ur
+    import urllib.error as _ue
+    if not ip or ip in ('unknown', '127.0.0.1', '::1'):
+        return 'localhost', '', 'local'
+    try:
+        url = f'http://ip-api.com/json/{ip}?fields=status,country,regionName,city'
+        with _ur.urlopen(url, timeout=4) as resp:
+            data = json.loads(resp.read().decode())
+        if data.get('status') == 'success':
+            return data.get('city', '?'), data.get('regionName', ''), data.get('country', '?')
+    except (_ue.URLError, Exception):
+        pass
+    return '?', '', '?'
+
+
+def _send_login_alert_email(user, request):
+    import logging
+    from django.core.mail import EmailMultiAlternatives
+    from django.conf import settings as _s
+    from django.utils import timezone as _tz
+
+    _log = logging.getLogger(__name__)
+    recipients = getattr(_s, 'LOGIN_ALERT_RECIPIENTS', [])
+    if not recipients:
+        return
+    try:
+        is_teacher = user.role == 'teacher'
+        now_str = _tz.now().strftime('%Y-%m-%d %H:%M:%S UTC')
+        ip = (request.META.get('HTTP_X_FORWARDED_FOR', '') or '').split(',')[0].strip() \
+             or request.META.get('REMOTE_ADDR', 'unknown')
+        ua = request.META.get('HTTP_USER_AGENT', 'unknown')
+        username_display = getattr(user, 'username', None) or '(not set)'
+        browser, device = _parse_user_agent(ua)
+        city, region, country = _geo_lookup(ip)
+        location = ', '.join(filter(None, [city, region, country]))
+        badge_color = '#dc2626' if is_teacher else '#0F766E'
+        badge_label = 'TEACHER LOGIN — CRITICAL' if is_teacher else 'Student Login'
+        header_gradient = 'linear-gradient(135deg,#7f1d1d,#dc2626)' if is_teacher \
+                          else 'linear-gradient(135deg,#0F172A,#0F766E)'
+
+        html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:24px 0;">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.08);">
+  <tr>
+    <td style="background:{header_gradient};padding:24px 32px;">
+      <span style="display:inline-block;background:rgba(255,255,255,0.18);color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;padding:4px 10px;border-radius:20px;text-transform:uppercase;">{badge_label}</span>
+      <h2 style="color:#fff;margin:10px 0 0;font-size:18px;">AbacusBlaze Login Alert</h2>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:28px 32px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr><td colspan="2" style="padding-bottom:16px;border-bottom:1px solid #e2e8f0;margin-bottom:16px;">
+          <p style="margin:0;color:#64748b;font-size:13px;">A user has just signed in to AbacusBlaze.</p>
+        </td></tr>
+        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;width:140px;">Time</td>
+            <td style="padding:10px 0;color:#1e293b;font-size:13px;font-weight:600;">{now_str}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:10px 8px;color:#64748b;font-size:13px;">Role</td>
+            <td style="padding:10px 8px;font-size:13px;font-weight:700;color:{badge_color};">{user.role.upper()}</td></tr>
+        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;">Name</td>
+            <td style="padding:10px 0;color:#1e293b;font-size:13px;">{user.name}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:10px 8px;color:#64748b;font-size:13px;">Email</td>
+            <td style="padding:10px 8px;color:#1e293b;font-size:13px;">{user.email}</td></tr>
+        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;">Username</td>
+            <td style="padding:10px 0;color:#1e293b;font-size:13px;">{username_display}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:10px 8px;color:#64748b;font-size:13px;">IP Address</td>
+            <td style="padding:10px 8px;color:#1e293b;font-size:13px;font-family:monospace;">{ip}</td></tr>
+        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;">Location</td>
+            <td style="padding:10px 0;color:#1e293b;font-size:13px;">{location}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:10px 8px;color:#64748b;font-size:13px;">Browser</td>
+            <td style="padding:10px 8px;color:#1e293b;font-size:13px;">{browser}</td></tr>
+        <tr><td style="padding:10px 0;color:#64748b;font-size:13px;">Device / OS</td>
+            <td style="padding:10px 0;color:#1e293b;font-size:13px;">{device}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:10px 8px;color:#64748b;font-size:13px;vertical-align:top;">User Agent</td>
+            <td style="padding:10px 8px;color:#475569;font-size:11px;word-break:break-all;">{ua}</td></tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#f1f5f9;padding:14px 32px;text-align:center;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;">AbacusBlaze automated login alert &mdash; do not reply</p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+        text_body = (
+            f'AbacusBlaze Login Alert\n\n'
+            f'Time: {now_str}\n'
+            f'Role: {user.role.upper()}\n'
+            f'Name: {user.name}\n'
+            f'Email: {user.email}\n'
+            f'Username: {username_display}\n'
+            f'IP: {ip}\n'
+            f'Location: {location}\n'
+            f'Browser: {browser}\n'
+            f'Device/OS: {device}\n'
+            f'User-Agent: {ua}\n'
+        )
+        bcc_list = [r for r in getattr(_s, 'EMAIL_BCC_RECIPIENTS', []) if r not in recipients]
+        subject = f'[{"CRITICAL" if is_teacher else "Login"}] {user.role.title()} login — {user.name} ({user.email})'
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=recipients, bcc=bcc_list)
+        msg.attach_alternative(html, 'text/html')
+        msg.send(fail_silently=False)
+    except Exception as _exc:
+        _log.error('Login alert email failed for %s: %s', user.email, _exc)
+
+
+def _send_welcome_email(student_name, student_email, set_password_url):
+    import logging
+    from django.core.mail import EmailMultiAlternatives
+    from django.conf import settings as _s
+
+    _log = logging.getLogger(__name__)
+    if not student_email:
+        _log.warning('Welcome email: no student email address provided.')
+        return
+    bcc_list = [r for r in getattr(_s, 'EMAIL_BCC_RECIPIENTS', []) if r.lower() != student_email.lower()]
+    try:
+        first_name = student_name.split()[0] if student_name else 'there'
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A 0%,#0F766E 60%,#F97316 100%);padding:36px 40px;text-align:center;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="160" height="48" style="display:inline-block;">
+        <defs>
+          <linearGradient id="wg" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#0F172A"/>
+            <stop offset="50%" stop-color="#0F766E"/>
+            <stop offset="100%" stop-color="#F97316"/>
+          </linearGradient>
+        </defs>
+        <rect width="200" height="60" rx="8" fill="#ffffff" opacity="0.15"/>
+        <text x="100" y="38" text-anchor="middle" font-size="22" font-weight="800"
+              font-family="'Segoe UI',Arial,sans-serif" fill="#ffffff" letter-spacing="1">AbacusBlaze</text>
+      </svg>
+      <h1 style="color:#ffffff;margin:16px 0 0;font-size:22px;font-weight:700;">Welcome to AbacusBlaze!</h1>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:40px;">
+      <p style="color:#1e293b;font-size:16px;margin:0 0 16px;">Hi <strong>{first_name}</strong>,</p>
+      <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 16px;">
+        Your account has been created on <strong>AbacusBlaze</strong> by your teacher. You're all set to start your abacus learning journey!
+      </p>
+      <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px;">
+        To get started, please set your own password by clicking the button below. This link is valid for <strong>7 days</strong>.
+      </p>
+      <div style="text-align:center;margin:32px 0;">
+        <a href="{set_password_url}"
+           style="display:inline-block;background:linear-gradient(135deg,#0F766E,#F97316);color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;font-weight:700;letter-spacing:0.5px;">
+          Set My Password
+        </a>
+      </div>
+      <p style="color:#94a3b8;font-size:13px;line-height:1.5;margin:24px 0 0;">
+        If you can't click the button, copy and paste this link into your browser:<br>
+        <span style="color:#0F766E;word-break:break-all;">{set_password_url}</span>
+      </p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0;">
+      <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 8px;">
+        Once you've set your password, log in at your portal and explore your lessons. Best of luck — you've got this!
+      </p>
+      <p style="color:#475569;font-size:15px;margin:0;">Happy learning,<br><strong style="color:#0F766E;">The AbacusBlaze Team</strong></p>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A,#0F766E);padding:20px 40px;text-align:center;">
+      <p style="color:#94a3b8;font-size:12px;margin:0;">AbacusBlaze &mdash; Empowering young minds through mental math</p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+        text_body = (
+            f'Welcome to AbacusBlaze, {student_name}!\n\n'
+            f'Your account has been created. Set your password here:\n{set_password_url}\n\n'
+            'This link is valid for 7 days.\n\nHappy learning,\nAbacusBlaze'
+        )
+        subject = f'Welcome to AbacusBlaze, {first_name}!'
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=[student_email], bcc=bcc_list)
+        msg.attach_alternative(html, 'text/html')
+        msg.send(fail_silently=False)
+        _log.info('Welcome email sent for %s to %s bcc %s', student_name, student_email, bcc_list)
+    except Exception as _exc:
+        _log.error('Welcome email failed for %s: %s', student_name, _exc)
+
+
+def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_name, attempt_number, elapsed_seconds, coins_awarded=0):
+    import logging, threading
+    from django.core.mail import EmailMultiAlternatives
+    from django.conf import settings as _s
+
+    _log = logging.getLogger(__name__)
+    bcc_list = getattr(_s, 'EMAIL_BCC_RECIPIENTS', [])
+
+    try:
+        from core.models import CurriculumQuestionAttempt, CurriculumUnitAttempt, StudentProfile
+        attempt = CurriculumUnitAttempt.objects.get(id=attempt_id)
+
+        from core.models import AppUser
+        student_email = None
+        try:
+            student_email = AppUser.objects.get(id=attempt.student_id).email
+        except Exception:
+            pass
+
+        parent_email = None
+        try:
+            profile = StudentProfile.objects.get(user_id=attempt.student_id)
+            parent_email = profile.parent_email or None
+        except Exception:
+            pass
+
+        to_list = list({e for e in [student_email, parent_email] if e})
+        effective_bcc = [r for r in bcc_list if r not in to_list]
+        if not to_list and not effective_bcc:
+            return
+        if not to_list:
+            to_list, effective_bcc = effective_bcc[:1], effective_bcc[1:]
+        q_attempts = (
+            CurriculumQuestionAttempt.objects
+            .filter(unit_attempt_id=attempt_id)
+            .select_related('curriculum_question')
+            .order_by('id')
+        )
+        total = q_attempts.count()
+        correct = attempt.correct_count
+        wrong = attempt.wrong_count
+        score_pct = round(correct / total * 100) if total else 0
+        passed = attempt.status == CurriculumUnitAttempt.STATUS_PASSED
+
+        mins, secs = divmod(elapsed_seconds, 60)
+        time_str = f'{mins}m {secs}s' if mins else f'{secs}s'
+
+        status_color = '#10b981' if passed else '#ef4444'
+        status_label = 'PASSED ✓' if passed else 'NEEDS PRACTICE ✗'
+
+        question_rows = ''
+        for idx, qa in enumerate(q_attempts, 1):
+            q_text = ' | '.join(qa.curriculum_question.question_text.split('\n')) if qa.curriculum_question else '—'
+            result_cell = '&#10003;' if qa.is_correct else '&#10007;'
+            result_color = '#28a745' if qa.is_correct else '#dc3545'
+            row_bg = '#ffffff' if idx % 2 == 0 else '#f7f9fc'
+            question_rows += (
+                f'<tr style="background:{row_bg};">'
+                f'<td style="padding:10px 14px;color:#555;border-bottom:1px solid #eee;">{idx}</td>'
+                f'<td style="padding:10px 14px;color:#333;font-family:monospace;border-bottom:1px solid #eee;">{q_text}</td>'
+                f'<td style="padding:10px 14px;color:#333;text-align:center;border-bottom:1px solid #eee;">{qa.student_answer}</td>'
+                f'<td style="padding:10px 14px;text-align:center;font-size:18px;font-weight:bold;color:{result_color};border-bottom:1px solid #eee;">{result_cell}</td>'
+                f'</tr>'
+            )
+
+        bar_width = max(2, score_pct)
+        bar_color = '#28a745' if passed else '#fd7e14'
+        status_badge_bg = '#d4edda' if passed else '#f8d7da'
+        status_badge_color = '#155724' if passed else '#721c24'
+        status_text = 'PASSED' if passed else 'NEEDS PRACTICE'
+
+        coins_section = ''
+        if coins_awarded > 0:
+            coins_section = f"""
+  <!-- Coins -->
+  <tr>
+    <td style="padding:0 28px 28px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#fff8e1,#fff3cd);border:1px solid #ffc107;border-radius:12px;">
+        <tr>
+          <td style="padding:18px 22px;">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="font-size:32px;padding-right:14px;vertical-align:middle;">&#129689;</td>
+                <td valign="middle">
+                  <p style="margin:0;font-size:16px;font-weight:bold;color:#7c5a00;">Coins Earned</p>
+                  <p style="margin:4px 0 0;font-size:24px;font-weight:bold;color:#c67f00;">+{coins_awarded} coins</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>"""
+
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Unit Progress Report</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:30px 0;">
+<tr><td align="center">
+
+<table width="680" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 5px 20px rgba(0,0,0,.1);">
+
+  <!-- Header -->
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A 0%,#0F766E 55%,#F97316 100%);padding:20px 28px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="left" valign="middle">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td valign="middle" style="padding-right:12px;">
+                  <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" width="48" height="48" style="display:block;">
+                    <rect width="256" height="256" rx="56" fill="url(#emailBrandBg)"/>
+                    <rect x="46" y="40" width="164" height="176" rx="28" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.46)" stroke-width="8"/>
+                    <rect x="80" y="76" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <rect x="80" y="118" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <rect x="80" y="160" width="96" height="10" rx="5" fill="#E6F6FF"/>
+                    <circle cx="102" cy="81" r="15" fill="#F97316"/>
+                    <circle cx="154" cy="81" r="15" fill="#38BDF8"/>
+                    <circle cx="128" cy="123" r="15" fill="#FB7185"/>
+                    <circle cx="102" cy="165" r="15" fill="#38BDF8"/>
+                    <circle cx="154" cy="165" r="15" fill="#F97316"/>
+                    <path d="M96 198L128 58L160 198" stroke="rgba(255,255,255,0.92)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M108 146H148" stroke="rgba(255,255,255,0.92)" stroke-width="10" stroke-linecap="round"/>
+                    <defs>
+                      <linearGradient id="emailBrandBg" x1="30" y1="22" x2="220" y2="230" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#0F172A"/>
+                        <stop offset="0.55" stop-color="#0F766E"/>
+                        <stop offset="1" stop-color="#F97316"/>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                </td>
+                <td valign="middle" style="color:white;font-size:22px;font-weight:bold;letter-spacing:1px;">AbacusBlaze</td>
+              </tr>
+            </table>
+          </td>
+          <td align="right" style="color:rgba(255,255,255,0.9);font-size:15px;font-weight:bold;">
+            UNIT PROGRESS REPORT
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Banner -->
+  <tr>
+    <td>
+      <img src="https://images.unsplash.com/photo-1509228468518-180dd4864904?w=1200&q=80"
+           width="680" alt="Abacus Practice" style="display:block;">
+    </td>
+  </tr>
+
+  <!-- Greeting -->
+  <tr>
+    <td style="padding:28px 28px 10px;">
+      <h2 style="margin:0 0 8px;color:#222;font-size:20px;">Great job, {student_name}!</h2>
+      <p style="font-size:15px;color:#555;line-height:1.7;margin:0;">
+        <strong>{student_name}</strong> has just completed a practice session on AbacusBlaze.
+        Here is a summary of the performance.
+      </p>
+    </td>
+  </tr>
+
+  <!-- Status badge -->
+  <tr>
+    <td style="padding:10px 28px 20px;">
+      <span style="display:inline-block;background:{status_badge_bg};color:{status_badge_color};
+                   padding:6px 18px;border-radius:20px;font-size:13px;font-weight:bold;
+                   letter-spacing:0.5px;">
+        {status_text}
+      </span>
+      &nbsp;
+      <span style="font-size:13px;color:#888;">Attempt #{attempt_number} &nbsp;|&nbsp; {unit_name} &nbsp;|&nbsp; {time_str}</span>
+    </td>
+  </tr>
+
+  <!-- Summary Cards -->
+  <tr>
+    <td style="padding:0 20px 24px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td width="25%" style="padding:6px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#e8f5e9;border-radius:8px;">
+              <tr><td align="center" style="padding:18px 10px;">
+                <h1 style="margin:0;color:#2e7d32;font-size:32px;">{total}</h1>
+                <p style="margin:6px 0 0;font-size:12px;color:#555;font-weight:bold;">TOTAL</p>
+              </td></tr>
+            </table>
+          </td>
+          <td width="25%" style="padding:6px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#e3f2fd;border-radius:8px;">
+              <tr><td align="center" style="padding:18px 10px;">
+                <h1 style="margin:0;color:#1565c0;font-size:32px;">{correct}</h1>
+                <p style="margin:6px 0 0;font-size:12px;color:#555;font-weight:bold;">CORRECT</p>
+              </td></tr>
+            </table>
+          </td>
+          <td width="25%" style="padding:6px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffebee;border-radius:8px;">
+              <tr><td align="center" style="padding:18px 10px;">
+                <h1 style="margin:0;color:#c62828;font-size:32px;">{wrong}</h1>
+                <p style="margin:6px 0 0;font-size:12px;color:#555;font-weight:bold;">INCORRECT</p>
+              </td></tr>
+            </table>
+          </td>
+          <td width="25%" style="padding:6px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff8e1;border-radius:8px;">
+              <tr><td align="center" style="padding:18px 10px;">
+                <h1 style="margin:0;color:#ef6c00;font-size:32px;">{score_pct}%</h1>
+                <p style="margin:6px 0 0;font-size:12px;color:#555;font-weight:bold;">SCORE</p>
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Progress Bar -->
+  <tr>
+    <td style="padding:0 28px 28px;">
+      <h3 style="color:#333;margin:0 0 10px;font-size:14px;">Score Progress</h3>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#e0e0e0;border-radius:30px;overflow:hidden;">
+        <tr>
+          <td style="background:{bar_color};height:16px;width:{bar_width}%;border-radius:30px;font-size:0;">&nbsp;</td>
+          <td style="width:{100 - bar_width}%;font-size:0;">&nbsp;</td>
+        </tr>
+      </table>
+      <p style="font-size:13px;color:#666;margin:6px 0 0;">{score_pct}% — {correct} of {total} questions correct</p>
+    </td>
+  </tr>
+
+  <!-- Details Table -->
+  <tr>
+    <td style="padding:0 28px 28px;">
+      <h3 style="color:#333;margin:0 0 12px;font-size:15px;">Session Details</h3>
+      <table width="100%" cellpadding="10" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
+        <tr style="background:#f7f9fc;">
+          <td style="color:#666;border-bottom:1px solid #eee;">Student</td>
+          <td style="color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{student_name}</td>
+        </tr>
+        <tr>
+          <td style="color:#666;border-bottom:1px solid #eee;">Unit</td>
+          <td style="color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{unit_name}</td>
+        </tr>
+        <tr style="background:#f7f9fc;">
+          <td style="color:#666;border-bottom:1px solid #eee;">Lesson</td>
+          <td style="color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{sub_lesson_name}</td>
+        </tr>
+        <tr>
+          <td style="color:#666;border-bottom:1px solid #eee;">Attempt #</td>
+          <td style="color:#222;font-weight:bold;text-align:right;border-bottom:1px solid #eee;">{attempt_number}</td>
+        </tr>
+        <tr style="background:#f7f9fc;">
+          <td style="color:#666;">Time Taken</td>
+          <td style="color:#222;font-weight:bold;text-align:right;">{time_str}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Question Breakdown -->
+  <tr>
+    <td style="padding:0 28px 32px;">
+      <h3 style="color:#333;margin:0 0 12px;font-size:15px;">Question Breakdown</h3>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+        <tr style="background:#0d6efd;color:white;">
+          <th align="left" style="padding:10px 14px;font-weight:600;">#</th>
+          <th align="left" style="padding:10px 14px;font-weight:600;">Question</th>
+          <th align="center" style="padding:10px 14px;font-weight:600;">Answer Given</th>
+          <th align="center" style="padding:10px 14px;font-weight:600;">Result</th>
+        </tr>
+        {question_rows}
+      </table>
+    </td>
+  </tr>
+
+  {coins_section}
+
+  <!-- Footer -->
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A 0%,#0F766E 55%,#F97316 100%);color:white;padding:20px 28px;text-align:center;">
+      <h3 style="margin:0 0 6px;">Thank You</h3>
+      <p style="margin:0 0 6px;font-size:14px;">AbacusBlaze</p>
+      <p style="font-size:12px;opacity:.8;margin:0;">This is an automated notification. Please do not reply to this email.</p>
+    </td>
+  </tr>
+
+</table>
+
+</td></tr>
+</table>
+
+</body>
+</html>"""
+
+        subject = f'AbacusBlaze — {student_name} {"passed" if passed else "completed"} {unit_name}'
+        text_body = (
+            f'{student_name} completed a practice session on AbacusBlaze.\n\n'
+            f'Unit: {unit_name} | Score: {correct}/{total} ({score_pct}%) | Attempt #{attempt_number} | Time: {time_str}\n'
+        )
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=to_list, bcc=effective_bcc)
+        msg.attach_alternative(html, 'text/html')
+        msg.send(fail_silently=False)
+        _log.info('Unit completion email sent for attempt %s to %s bcc %s', attempt_id, to_list, effective_bcc)
+    except Exception as _exc:
+        _log.error('Unit completion email failed for attempt %s: %s', attempt_id, _exc)
+
+
+@require_http_methods(['POST'])
+def student_save_speed_prefs(request):
+    user, response = _student_guard(request)
+    if response:
+        return response
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'message': 'Invalid JSON.'}, status=400)
+    prefs, _ = StudentSpeedPrefs.objects.get_or_create(user_id=user.id)
+    if data.get('voice_lang'):
+        prefs.voice_lang = str(data['voice_lang'])[:20]
+    if data.get('voice_name'):
+        prefs.voice_name = str(data['voice_name'])[:60]
+    prefs.voice_rate = int(data.get('voice_rate', prefs.voice_rate))
+    prefs.line_gap = int(data.get('line_gap', prefs.line_gap))
+    prefs.danger_zone = bool(data.get('danger_zone', prefs.danger_zone))
+    prefs.dz_voice_rate = int(data.get('dz_voice_rate', prefs.dz_voice_rate))
+    prefs.dz_line_gap = int(data.get('dz_line_gap', prefs.dz_line_gap))
+    prefs.save()
+    return JsonResponse({'ok': True})
 
 
 @require_http_methods(['POST'])
@@ -1471,12 +2312,6 @@ def student_submit_unit_question(request):
                 updated_at=timezone.now(),
             )
         elif latest_attempt.status in (CurriculumUnitAttempt.STATUS_PASSED, CurriculumUnitAttempt.STATUS_FAILED):
-            already_in_completed = CurriculumQuestionAttempt.objects.filter(
-                unit_attempt_id=latest_attempt.id,
-                curriculum_question_id=question.id,
-            ).exists()
-            if already_in_completed:
-                return JsonResponse({'message': 'This question was already attempted.'}, status=400)
             attempt = CurriculumUnitAttempt.objects.create(
                 student_id=user.id,
                 unit_id=unit.id,
@@ -1533,6 +2368,28 @@ def student_submit_unit_question(request):
             attempt.completed_at = None
         attempt.updated_at = timezone.now()
         attempt.save(update_fields=['correct_count', 'wrong_count', 'elapsed_seconds', 'status', 'completed_at', 'updated_at'])
+
+        if is_complete:
+            import threading as _threading
+            profile = StudentProfile.objects.filter(user_id=user.id).first()
+            student_name = (
+                f'{profile.first_name or ""} {profile.last_name or ""}'.strip()
+                or user.username
+            ) if profile else user.username
+            sub_lesson = unit.sub_lesson
+            _threading.Thread(
+                target=_send_unit_completion_email,
+                args=(
+                    attempt.id,
+                    student_name,
+                    unit.unit_name,
+                    sub_lesson.sub_lesson_name if sub_lesson else '',
+                    attempt.attempt_number,
+                    attempt.elapsed_seconds or 0,
+                    coins_awarded,
+                ),
+                daemon=True,
+            ).start()
 
     return JsonResponse(
         {
@@ -1909,14 +2766,10 @@ def student_redeem_toy(request):
 # Google Cloud TTS demo
 # ---------------------------------------------------------------------------
 
-def tts_demo(request):
-    return render(request, 'ui/tts_demo.html')
-
-
 @csrf_exempt
 @require_http_methods(['POST'])
 def tts_synthesize(request):
-    import json
+    import json, hashlib, base64, threading
     try:
         body = json.loads(request.body)
     except Exception:
@@ -1924,7 +2777,7 @@ def tts_synthesize(request):
 
     text = (body.get('text') or '').strip()
     voice_name = (body.get('voice') or 'en-GB-Neural2-B').strip()
-    speaking_rate = float(body.get('rate') or 1.0)
+    speaking_rate = round(float(body.get('rate') or 1.0), 2)
     line_gap_ms = max(0, min(3000, int(body.get('line_gap_ms') or 0)))
 
     if not text:
@@ -1932,46 +2785,322 @@ def tts_synthesize(request):
     if len(text) > 500:
         return JsonResponse({'error': 'text too long (max 500 chars)'}, status=400)
 
+    text_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
+    blob_name = f'tts-cache/v2/{voice_name}/{speaking_rate}/{line_gap_ms}/{text_hash}.mp3'
+    bucket_name = getattr(settings, 'GCS_BUCKET_NAME', '')
+
+    # --- GCS cache hit ---
+    if bucket_name:
+        try:
+            gcs = _gcs_client()
+            bucket = gcs.bucket(bucket_name)
+            blob = bucket.blob(blob_name)
+            if blob.exists():
+                audio_bytes = blob.download_as_bytes()
+                audio_b64 = base64.b64encode(audio_bytes).decode('ascii')
+                return JsonResponse({'audio': f'data:audio/mpeg;base64,{audio_b64}'})
+        except Exception:
+            pass  # fall through to synthesize
+
+    # --- GCloud TTS synthesis ---
     try:
         from google.cloud import texttospeech
         credentials_json = getattr(settings, 'GCS_CREDENTIALS_JSON', '')
         if credentials_json:
-            import json as _json
             from google.oauth2 import service_account
-            info = _json.loads(credentials_json)
+            info = json.loads(credentials_json)
             creds = service_account.Credentials.from_service_account_info(info)
-            client = texttospeech.TextToSpeechClient(credentials=creds)
+            tts_client = texttospeech.TextToSpeechClient(credentials=creds)
         else:
-            client = texttospeech.TextToSpeechClient()
+            tts_client = texttospeech.TextToSpeechClient()
 
         language_code = '-'.join(voice_name.split('-')[:2])
 
-        if line_gap_ms > 0:
-            import html as _html
-            lines = [l.strip() for l in text.split('\n') if l.strip()]
-            break_tag = f'<break time="{line_gap_ms}ms"/>'
-            ssml_body = break_tag.join(_html.escape(l) for l in lines)
-            ssml = f'<speak>{ssml_body}</speak>'
-            synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
-        else:
-            synthesis_input = texttospeech.SynthesisInput(text=text)
+        import html as _html, re as _re
+        lines = [l.strip() for l in text.split('\n') if l.strip()]
 
-        voice_params = texttospeech.VoiceSelectionParams(
-            language_code=language_code,
-            name=voice_name,
-        )
-        audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3,
-            speaking_rate=speaking_rate,
-        )
-        response = client.synthesize_speech(
+        def _to_ssml_line(line):
+            escaped = _html.escape(line)
+            return _re.sub(r'\d+', lambda m: f'<say-as interpret-as="cardinal">{m.group()}</say-as>', escaped)
+
+        if line_gap_ms > 0:
+            break_tag = f'<break time="{line_gap_ms}ms"/>'
+            ssml_body = break_tag.join(_to_ssml_line(l) for l in lines)
+        else:
+            ssml_body = ' '.join(_to_ssml_line(l) for l in lines)
+        synthesis_input = texttospeech.SynthesisInput(ssml=f'<speak>{ssml_body}</speak>')
+
+        tts_response = tts_client.synthesize_speech(
             input=synthesis_input,
-            voice=voice_params,
-            audio_config=audio_config,
+            voice=texttospeech.VoiceSelectionParams(language_code=language_code, name=voice_name),
+            audio_config=texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3,
+                speaking_rate=speaking_rate,
+            ),
         )
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-    import base64
-    audio_b64 = base64.b64encode(response.audio_content).decode('ascii')
+    audio_bytes = tts_response.audio_content
+
+    # --- Upload to GCS in background (non-blocking) ---
+    if bucket_name:
+        def _upload():
+            try:
+                gcs = _gcs_client()
+                blob = gcs.bucket(bucket_name).blob(blob_name)
+                blob.upload_from_string(audio_bytes, content_type='audio/mpeg')
+            except Exception:
+                pass
+        threading.Thread(target=_upload, daemon=True).start()
+
+    audio_b64 = base64.b64encode(audio_bytes).decode('ascii')
     return JsonResponse({'audio': f'data:audio/mpeg;base64,{audio_b64}'})
+
+
+@require_http_methods(['GET'])
+def student_check_username(request):
+    q = request.GET.get('q', '').strip().lower()
+    if len(q) < 3:
+        return JsonResponse({'available': False, 'error': 'At least 3 characters'})
+    if not re.match(r'^[a-z0-9_]{3,30}$', q):
+        return JsonResponse({'available': False, 'error': 'Letters, numbers and underscores only'})
+    taken = AppUser.objects.filter(username=q).exists()
+    return JsonResponse({'available': not taken})
+
+
+def _validate_username_post(username_raw):
+    """Returns (cleaned, error_string_or_None)."""
+    u = username_raw.strip().lower()
+    if not u:
+        return u, 'Username is required.'
+    if len(u) < 3:
+        return u, 'Username must be at least 3 characters.'
+    if len(u) > 30:
+        return u, 'Username must be 30 characters or fewer.'
+    if not re.match(r'^[a-z0-9_]+$', u):
+        return u, 'Username may only contain letters, numbers and underscores.'
+    return u, None
+
+
+@require_http_methods(['GET', 'POST'])
+def student_force_change_password(request):
+    user, response = _student_guard(request)
+    if response:
+        return response
+
+    prefs = StudentSpeedPrefs.objects.filter(user_id=user.id).first()
+    if not prefs or not prefs.must_change_password:
+        return redirect('ui-student-assignments')
+
+    if request.method == 'POST':
+        new_password = request.POST.get('new_password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
+        username_raw = request.POST.get('username', '')
+        username, username_err = _validate_username_post(username_raw)
+        if not new_password:
+            messages.error(request, 'New password is required.')
+        elif new_password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+        elif len(new_password) < 6:
+            messages.error(request, 'Password must be at least 6 characters.')
+        elif username_err:
+            messages.error(request, username_err)
+        elif AppUser.objects.filter(username=username).exclude(id=user.id).exists():
+            messages.error(request, 'That username is already taken.')
+        else:
+            user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            user.username = username
+            user.save(update_fields=['password', 'username'])
+            prefs.must_change_password = False
+            prefs.save(update_fields=['must_change_password'])
+            messages.success(request, 'Password updated! Welcome to AbacusBlaze.')
+            return redirect('ui-student-assignments')
+
+    return render(request, 'ui/student_force_change_password.html', {'username_val': request.POST.get('username', '')})
+
+
+@require_http_methods(['GET', 'POST'])
+def student_set_password_via_token(request, token):
+    from django.core import signing as _signing
+    try:
+        data = _signing.loads(token, max_age=7 * 24 * 3600, salt='welcome-set-password')
+        user_id = data['uid']
+        user = AppUser.objects.get(id=user_id)
+    except Exception:
+        return render(request, 'ui/set_password_invalid.html', status=400)
+
+    if request.method == 'POST':
+        new_password = request.POST.get('new_password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
+        username_raw = request.POST.get('username', '')
+        username, username_err = _validate_username_post(username_raw)
+        if not new_password:
+            messages.error(request, 'New password is required.')
+        elif new_password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+        elif len(new_password) < 6:
+            messages.error(request, 'Password must be at least 6 characters.')
+        elif username_err:
+            messages.error(request, username_err)
+        elif AppUser.objects.filter(username=username).exclude(id=user.id).exists():
+            messages.error(request, 'That username is already taken.')
+        else:
+            user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            user.username = username
+            user.save(update_fields=['password', 'username'])
+            StudentSpeedPrefs.objects.filter(user_id=user.id).update(must_change_password=False)
+            request.session[SESSION_USER_ID] = user.id
+            messages.success(request, 'Password set! Welcome to AbacusBlaze.')
+            return redirect('ui-student-assignments')
+
+    return render(request, 'ui/student_set_password.html', {
+        'user_name': user.name,
+        'username_val': request.POST.get('username', ''),
+    })
+
+
+@require_http_methods(['GET', 'POST'])
+def student_change_password(request):
+    user, response = _student_guard(request)
+    if response:
+        return response
+
+    if request.method == 'POST':
+        current_password = request.POST.get('current_password', '').strip()
+        new_password = request.POST.get('new_password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
+
+        if not bcrypt.checkpw(current_password.encode('utf-8'), user.password.encode('utf-8')):
+            messages.error(request, 'Current password is incorrect.')
+        elif not new_password:
+            messages.error(request, 'New password is required.')
+        elif len(new_password) < 6:
+            messages.error(request, 'Password must be at least 6 characters.')
+        elif new_password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+        else:
+            user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            user.save(update_fields=['password'])
+            messages.success(request, 'Password changed successfully.')
+            return redirect('ui-student-change-password')
+
+    return render(request, 'ui/student_change_password.html', {'current_user': user})
+
+
+@require_http_methods(['GET', 'POST'])
+def forgot_password_view(request):
+    if request.method == 'POST':
+        email = request.POST.get('email', '').strip().lower()
+        try:
+            user = AppUser.objects.get(email=email)
+        except AppUser.DoesNotExist:
+            user = None
+
+        if user:
+            from django.core import signing as _signing
+            token = _signing.dumps({'uid': user.id}, salt='password-reset')
+            reset_url = request.build_absolute_uri(f'/reset-password/{token}/')
+            import threading as _t
+            _t.Thread(
+                target=_send_password_reset_email,
+                args=(user.name, user.email, reset_url),
+                daemon=True,
+            ).start()
+
+        # Always show same message to avoid email enumeration
+        return render(request, 'ui/forgot_password_sent.html')
+
+    return render(request, 'ui/forgot_password.html')
+
+
+@require_http_methods(['GET', 'POST'])
+def reset_password_via_token(request, token):
+    from django.core import signing as _signing
+    try:
+        data = _signing.loads(token, max_age=24 * 3600, salt='password-reset')
+        user = AppUser.objects.get(id=data['uid'])
+    except Exception:
+        return render(request, 'ui/set_password_invalid.html', status=400)
+
+    if request.method == 'POST':
+        new_password = request.POST.get('new_password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
+        if not new_password:
+            messages.error(request, 'New password is required.')
+        elif len(new_password) < 6:
+            messages.error(request, 'Password must be at least 6 characters.')
+        elif new_password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+        else:
+            user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            user.save(update_fields=['password'])
+            messages.success(request, 'Password reset! You can now log in.')
+            return redirect('ui-login')
+
+    return render(request, 'ui/reset_password.html', {'token': token})
+
+
+def _send_password_reset_email(student_name, student_email, reset_url):
+    import logging
+    from django.core.mail import EmailMultiAlternatives
+
+    _log = logging.getLogger(__name__)
+    try:
+        first_name = student_name.split()[0] if student_name else 'there'
+        html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 0;">
+<tr><td align="center">
+<table width="520" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A,#0F766E);padding:28px 36px;">
+      <h2 style="color:#fff;margin:0;font-size:20px;">AbacusBlaze — Password Reset</h2>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:36px;">
+      <p style="color:#1e293b;font-size:15px;margin:0 0 16px;">Hi <strong>{first_name}</strong>,</p>
+      <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 24px;">
+        We received a request to reset your AbacusBlaze password.
+        Click the button below to choose a new password. This link is valid for <strong>24 hours</strong>.
+      </p>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="{reset_url}"
+           style="display:inline-block;background:linear-gradient(135deg,#0F172A,#0F766E);color:#fff;
+                  text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:700;font-size:15px;">
+          Reset My Password
+        </a>
+      </div>
+      <p style="color:#94a3b8;font-size:12px;margin:0;">
+        If you didn't request this, you can safely ignore this email — your password won't change.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#f1f5f9;padding:14px 36px;text-align:center;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;">AbacusBlaze automated email &mdash; do not reply</p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+        text_body = (
+            f'Hi {first_name},\n\n'
+            f'Reset your AbacusBlaze password here (valid 24 hours):\n{reset_url}\n\n'
+            f"If you didn't request this, ignore this email.\n\nAbacusBlaze"
+        )
+        msg = EmailMultiAlternatives(
+            subject='AbacusBlaze — Reset your password',
+            body=text_body,
+            to=[student_email],
+        )
+        msg.attach_alternative(html, 'text/html')
+        msg.send(fail_silently=False)
+        _log.info('Password reset email sent to %s', student_email)
+    except Exception as _exc:
+        _log.error('Password reset email failed for %s: %s', student_email, _exc)
