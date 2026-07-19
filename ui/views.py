@@ -1933,15 +1933,22 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
         from core.models import CurriculumQuestionAttempt, CurriculumUnitAttempt, StudentProfile
         attempt = CurriculumUnitAttempt.objects.get(id=attempt_id)
 
+        from core.models import AppUser
+        student_email = None
+        try:
+            student_email = AppUser.objects.get(id=attempt.student_id).email
+        except Exception:
+            pass
+
         parent_email = None
         try:
             profile = StudentProfile.objects.get(user_id=attempt.student_id)
             parent_email = profile.parent_email or None
         except Exception:
-            pass  # no profile or no parent email — fall back to BCC
+            pass
 
-        to_list = [parent_email] if parent_email else []
-        effective_bcc = [r for r in bcc_list if r != parent_email]
+        to_list = list({e for e in [student_email, parent_email] if e})
+        effective_bcc = [r for r in bcc_list if r not in to_list]
         if not to_list and not effective_bcc:
             return
         if not to_list:
@@ -2077,10 +2084,10 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
   <!-- Greeting -->
   <tr>
     <td style="padding:28px 28px 10px;">
-      <h2 style="margin:0 0 8px;color:#222;font-size:20px;">Dear Parent,</h2>
+      <h2 style="margin:0 0 8px;color:#222;font-size:20px;">Great job, {student_name}!</h2>
       <p style="font-size:15px;color:#555;line-height:1.7;margin:0;">
-        Great news! Your child <strong>{student_name}</strong> has just completed a practice session on AbacusBlaze.
-        Here is a summary of how they did.
+        <strong>{student_name}</strong> has just completed a practice session on AbacusBlaze.
+        Here is a summary of the performance.
       </p>
     </td>
   </tr>
@@ -2220,8 +2227,7 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
 
         subject = f'AbacusBlaze — {student_name} {"passed" if passed else "completed"} {unit_name}'
         text_body = (
-            f'Dear Parent,\n\n'
-            f'Your child {student_name} has just completed a practice session on AbacusBlaze.\n\n'
+            f'{student_name} completed a practice session on AbacusBlaze.\n\n'
             f'Unit: {unit_name} | Score: {correct}/{total} ({score_pct}%) | Attempt #{attempt_number} | Time: {time_str}\n'
         )
         msg = EmailMultiAlternatives(subject=subject, body=text_body, to=to_list, bcc=effective_bcc)
