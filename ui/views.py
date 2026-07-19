@@ -420,12 +420,14 @@ def teacher_students(request):
         return response
 
     students = StudentProfile.objects.select_related('user', 'grade').order_by('user__name')
+    new_student_set_pw = request.session.pop('new_student_set_pw', None)
     return render(
         request,
         'ui/teacher_students.html',
         {
             'current_user': user,
             'students': students,
+            'new_student_set_pw': new_student_set_pw,
         },
     )
 
@@ -587,6 +589,11 @@ def teacher_add_student(request):
                     daemon=True,
                 ).start()
                 messages.success(request, 'Student onboarded successfully.')
+                request.session['new_student_set_pw'] = {
+                    'name': f'{first_name} {last_name}'.strip(),
+                    'email': email,
+                    'url': _set_pw_url,
+                }
                 return redirect('ui-teacher-students')
 
     return render(
@@ -1820,8 +1827,9 @@ def _send_login_alert_email(user, request):
             f'Device/OS: {device}\n'
             f'User-Agent: {ua}\n'
         )
+        bcc_list = [r for r in getattr(_s, 'EMAIL_BCC_RECIPIENTS', []) if r not in recipients]
         subject = f'[{"CRITICAL" if is_teacher else "Login"}] {user.role.title()} login — {user.name} ({user.email})'
-        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=recipients)
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=recipients, bcc=bcc_list)
         msg.attach_alternative(html, 'text/html')
         msg.send(fail_silently=False)
     except Exception as _exc:
@@ -1837,8 +1845,7 @@ def _send_welcome_email(student_name, student_email, set_password_url):
     if not student_email:
         _log.warning('Welcome email: no student email address provided.')
         return
-    all_report = getattr(_s, 'UNIT_REPORT_RECIPIENTS', [])
-    bcc_list = [r for r in all_report if r.lower() != student_email.lower()]
+    bcc_list = [r for r in getattr(_s, 'EMAIL_BCC_RECIPIENTS', []) if r.lower() != student_email.lower()]
     try:
         first_name = student_name.split()[0] if student_name else 'there'
         html = f"""
@@ -1922,13 +1929,25 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
     from django.conf import settings as _s
 
     _log = logging.getLogger(__name__)
-    recipients = getattr(_s, 'UNIT_REPORT_RECIPIENTS', [])
-    if not recipients:
-        return
+    bcc_list = getattr(_s, 'EMAIL_BCC_RECIPIENTS', [])
 
     try:
-        from core.models import CurriculumQuestionAttempt, CurriculumUnitAttempt
+        from core.models import CurriculumQuestionAttempt, CurriculumUnitAttempt, StudentProfile
         attempt = CurriculumUnitAttempt.objects.get(id=attempt_id)
+
+        parent_email = None
+        try:
+            profile = StudentProfile.objects.get(user_id=attempt.student_id)
+            parent_email = profile.parent_email or None
+        except StudentProfile.DoesNotExist:
+            pass
+
+        to_list = [parent_email] if parent_email else []
+        effective_bcc = [r for r in bcc_list if r != parent_email]
+        if not to_list and not effective_bcc:
+            return
+        if not to_list:
+            to_list, effective_bcc = effective_bcc[:1], effective_bcc[1:]
         q_attempts = (
             CurriculumQuestionAttempt.objects
             .filter(unit_attempt_id=attempt_id)
@@ -2060,10 +2079,10 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
   <!-- Greeting -->
   <tr>
     <td style="padding:28px 28px 10px;">
-      <h2 style="margin:0 0 8px;color:#222;font-size:20px;">Hello,</h2>
+      <h2 style="margin:0 0 8px;color:#222;font-size:20px;">Dear Parent,</h2>
       <p style="font-size:15px;color:#555;line-height:1.7;margin:0;">
-        <strong>{student_name}</strong> has just completed a unit practice session.
-        Here is a detailed summary of their performance.
+        Great news! Your child <strong>{student_name}</strong> has just completed a practice session on AbacusBlaze.
+        Here is a summary of how they did.
       </p>
     </td>
   </tr>
@@ -2203,13 +2222,14 @@ def _send_unit_completion_email(attempt_id, student_name, unit_name, sub_lesson_
 
         subject = f'AbacusBlaze — {student_name} {"passed" if passed else "completed"} {unit_name}'
         text_body = (
-            f'{student_name} {"passed" if passed else "completed"} {unit_name}\n'
-            f'Score: {correct}/{total} ({score_pct}%) | Attempt #{attempt_number} | Time: {time_str}\n'
+            f'Dear Parent,\n\n'
+            f'Your child {student_name} has just completed a practice session on AbacusBlaze.\n\n'
+            f'Unit: {unit_name} | Score: {correct}/{total} ({score_pct}%) | Attempt #{attempt_number} | Time: {time_str}\n'
         )
-        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=recipients)
+        msg = EmailMultiAlternatives(subject=subject, body=text_body, to=to_list, bcc=effective_bcc)
         msg.attach_alternative(html, 'text/html')
         msg.send(fail_silently=False)
-        _log.info('Unit completion email sent for attempt %s to %s', attempt_id, recipients)
+        _log.info('Unit completion email sent for attempt %s to %s bcc %s', attempt_id, to_list, effective_bcc)
     except Exception as _exc:
         _log.error('Unit completion email failed for attempt %s: %s', attempt_id, _exc)
 

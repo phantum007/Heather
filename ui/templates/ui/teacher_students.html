@@ -4,6 +4,27 @@
 {% block page_title %}Student Directory{% endblock %}
 
 {% block content %}
+
+{% if new_student_set_pw %}
+<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:10px;padding:18px 22px;margin-bottom:18px;">
+  <p style="margin:0 0 6px;font-weight:700;color:#92400e;font-size:14px;">
+    Set-password link for {{ new_student_set_pw.name }} ({{ new_student_set_pw.email }})
+  </p>
+  <p style="margin:0 0 10px;color:#78350f;font-size:13px;">
+    A welcome email was sent. If the student did not receive it, share this link directly:
+  </p>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <input id="sp-link" type="text" readonly value="{{ new_student_set_pw.url }}"
+      style="flex:1;min-width:0;font-size:12px;font-family:monospace;padding:8px 10px;border:1px solid #fbbf24;border-radius:6px;background:#fff;color:#1e293b;">
+    <button onclick="navigator.clipboard.writeText(document.getElementById('sp-link').value).then(function(){this.textContent='Copied!';setTimeout(function(){document.getElementById('sp-btn').textContent='Copy Link'},1500)}.bind(this))" id="sp-btn"
+      style="padding:8px 16px;background:#f59e0b;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;white-space:nowrap;">
+      Copy Link
+    </button>
+  </div>
+  <p style="margin:8px 0 0;color:#92400e;font-size:12px;">This link is valid for 7 days.</p>
+</div>
+{% endif %}
+
 <section class="card">
   <div class="toolbar">
     <div>
