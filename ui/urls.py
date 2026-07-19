@@ -33,7 +33,10 @@ urlpatterns = [
     path('student/coins/redeem/', views.student_redeem_toy, name='ui-student-redeem-toy'),
     path('student/speed-prefs/', views.student_save_speed_prefs, name='ui-student-speed-prefs'),
     path('student/change-password/', views.student_force_change_password, name='ui-student-force-change-password'),
+    path('student/account/change-password/', views.student_change_password, name='ui-student-change-password'),
     path('student/set-password/<str:token>/', views.student_set_password_via_token, name='ui-student-set-password'),
     path('student/check-username/', views.student_check_username, name='ui-student-check-username'),
+    path('forgot-password/', views.forgot_password_view, name='ui-forgot-password'),
+    path('reset-password/<str:token>/', views.reset_password_via_token, name='ui-reset-password'),
     path('tts/synthesize/', views.tts_synthesize, name='ui-tts-synthesize'),
 ]

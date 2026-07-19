@@ -2958,3 +2958,149 @@ def student_set_password_via_token(request, token):
         'user_name': user.name,
         'username_val': request.POST.get('username', ''),
     })
+
+
+@require_http_methods(['GET', 'POST'])
+def student_change_password(request):
+    user, response = _student_guard(request)
+    if response:
+        return response
+
+    if request.method == 'POST':
+        current_password = request.POST.get('current_password', '').strip()
+        new_password = request.POST.get('new_password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
+
+        if not bcrypt.checkpw(current_password.encode('utf-8'), user.password.encode('utf-8')):
+            messages.error(request, 'Current password is incorrect.')
+        elif not new_password:
+            messages.error(request, 'New password is required.')
+        elif len(new_password) < 6:
+            messages.error(request, 'Password must be at least 6 characters.')
+        elif new_password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+        else:
+            user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            user.save(update_fields=['password'])
+            messages.success(request, 'Password changed successfully.')
+            return redirect('ui-student-change-password')
+
+    return render(request, 'ui/student_change_password.html', {'current_user': user})
+
+
+@require_http_methods(['GET', 'POST'])
+def forgot_password_view(request):
+    if request.method == 'POST':
+        email = request.POST.get('email', '').strip().lower()
+        try:
+            user = AppUser.objects.get(email=email)
+        except AppUser.DoesNotExist:
+            user = None
+
+        if user:
+            from django.core import signing as _signing
+            token = _signing.dumps({'uid': user.id}, salt='password-reset')
+            reset_url = request.build_absolute_uri(f'/reset-password/{token}/')
+            import threading as _t
+            _t.Thread(
+                target=_send_password_reset_email,
+                args=(user.name, user.email, reset_url),
+                daemon=True,
+            ).start()
+
+        # Always show same message to avoid email enumeration
+        return render(request, 'ui/forgot_password_sent.html')
+
+    return render(request, 'ui/forgot_password.html')
+
+
+@require_http_methods(['GET', 'POST'])
+def reset_password_via_token(request, token):
+    from django.core import signing as _signing
+    try:
+        data = _signing.loads(token, max_age=24 * 3600, salt='password-reset')
+        user = AppUser.objects.get(id=data['uid'])
+    except Exception:
+        return render(request, 'ui/set_password_invalid.html', status=400)
+
+    if request.method == 'POST':
+        new_password = request.POST.get('new_password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
+        if not new_password:
+            messages.error(request, 'New password is required.')
+        elif len(new_password) < 6:
+            messages.error(request, 'Password must be at least 6 characters.')
+        elif new_password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+        else:
+            user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            user.save(update_fields=['password'])
+            messages.success(request, 'Password reset! You can now log in.')
+            return redirect('ui-login')
+
+    return render(request, 'ui/reset_password.html', {'token': token})
+
+
+def _send_password_reset_email(student_name, student_email, reset_url):
+    import logging
+    from django.core.mail import EmailMultiAlternatives
+
+    _log = logging.getLogger(__name__)
+    try:
+        first_name = student_name.split()[0] if student_name else 'there'
+        html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 0;">
+<tr><td align="center">
+<table width="520" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <tr>
+    <td style="background:linear-gradient(135deg,#0F172A,#0F766E);padding:28px 36px;">
+      <h2 style="color:#fff;margin:0;font-size:20px;">AbacusBlaze — Password Reset</h2>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:36px;">
+      <p style="color:#1e293b;font-size:15px;margin:0 0 16px;">Hi <strong>{first_name}</strong>,</p>
+      <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 24px;">
+        We received a request to reset your AbacusBlaze password.
+        Click the button below to choose a new password. This link is valid for <strong>24 hours</strong>.
+      </p>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="{reset_url}"
+           style="display:inline-block;background:linear-gradient(135deg,#0F172A,#0F766E);color:#fff;
+                  text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:700;font-size:15px;">
+          Reset My Password
+        </a>
+      </div>
+      <p style="color:#94a3b8;font-size:12px;margin:0;">
+        If you didn't request this, you can safely ignore this email — your password won't change.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#f1f5f9;padding:14px 36px;text-align:center;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;">AbacusBlaze automated email &mdash; do not reply</p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+        text_body = (
+            f'Hi {first_name},\n\n'
+            f'Reset your AbacusBlaze password here (valid 24 hours):\n{reset_url}\n\n'
+            f"If you didn't request this, ignore this email.\n\nAbacusBlaze"
+        )
+        msg = EmailMultiAlternatives(
+            subject='AbacusBlaze — Reset your password',
+            body=text_body,
+            to=[student_email],
+        )
+        msg.attach_alternative(html, 'text/html')
+        msg.send(fail_silently=False)
+        _log.info('Password reset email sent to %s', student_email)
+    except Exception as _exc:
+        _log.error('Password reset email failed for %s: %s', student_email, _exc)
